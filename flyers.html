@@ -99,6 +99,13 @@
         .toast-ok { background: #09090b; }
         .toast-error { background: #b91c1c; }
 
+        /* Pistas visuales de lo que se puede arrastrar en la vista previa (no salen en el PNG) */
+        @media (hover: hover) {
+            #stage [data-mover]:hover, #stage [data-qr]:hover { outline: 2px dashed rgba(37, 99, 235, 0.85); outline-offset: 4px; }
+        }
+        #stage .mover-arrastrando { outline: 2px solid rgba(37, 99, 235, 0.95); outline-offset: 4px; }
+        #flyer-real.exportando [data-mover], #flyer-real.exportando [data-qr] { outline: none !important; }
+
         :focus-visible { outline: 2px solid #1e40af; outline-offset: 2px; }
         @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
     </style>
@@ -141,6 +148,11 @@
                         <label class="campo-label" for="in-titulo">Título</label>
                         <textarea id="in-titulo" class="campo" rows="3" placeholder="¡Ya tenemos&#10;*catálogo&#10;online!"></textarea>
                         <p class="campo-ayuda">Cada renglón es una línea del título. Empezá un renglón con * para resaltarlo con el color.</p>
+                        <div class="flex items-center justify-between mt-2">
+                            <label class="campo-label !mb-0" for="in-titulo-zoom">Tamaño del título</label>
+                            <span id="titulo-zoom-val" class="text-[0.7rem] font-bold text-slate-400"></span>
+                        </div>
+                        <input id="in-titulo-zoom" type="range" min="50" max="300" step="5" class="rango">
                     </div>
                     <div data-plantillas="oferta">
                         <label class="campo-label" for="in-destacado">Texto gigante (precio, descuento, fecha)</label>
@@ -164,6 +176,10 @@
                         <input id="in-pie" class="campo" type="text" maxlength="40" placeholder="dropea.com.ar">
                         <p class="campo-ayuda">Dejá un campo vacío y esa parte no aparece en el flyer.</p>
                     </div>
+                    <div class="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
+                        <p class="campo-ayuda !mt-0">Arrastrá los textos y el logo de Dropea en la vista previa (con el mouse o el dedo) para ponerlos donde quieras.</p>
+                        <button type="button" id="btn-pos-reset" class="btn-sec flex-shrink-0">Reubicar</button>
+                    </div>
                 </div>
             </section>
 
@@ -181,7 +197,7 @@
                     </label>
                 </div>
                 <div id="imagenes-wrap" class="flex flex-col gap-3"></div>
-                <p class="campo-ayuda">Podés subir hasta dos imágenes (por ejemplo, celular y PC). Con "Entera" y un tamaño menor la imagen se achica, y la movés arrastrándola con el mouse en la vista previa; la segunda queda por encima de la primera. Al subir una imagen se activa el estilo Foto.</p>
+                <p class="campo-ayuda">Podés subir hasta dos imágenes (por ejemplo, celular y PC). Con "Entera" y un tamaño menor la imagen se achica, y la movés arrastrándola con el mouse o el dedo en la vista previa; la segunda queda por encima de la primera. Al subir una imagen se activa el estilo Foto.</p>
             </section>
 
             <section class="seccion">
@@ -216,7 +232,7 @@
                         <input id="in-qr-zoom" type="range" min="50" max="250" step="1" class="rango" disabled>
                     </div>
                     <div class="flex items-center justify-between gap-3 mt-2">
-                        <p class="campo-ayuda !mt-0">Arrastralo con el mouse en la vista previa para ponerlo donde quieras.</p>
+                        <p class="campo-ayuda !mt-0">Arrastralo con el mouse o el dedo en la vista previa para ponerlo donde quieras.</p>
                         <button type="button" id="btn-qr-reset" class="btn-sec flex-shrink-0" disabled>Reubicar</button>
                     </div>
                 </div>

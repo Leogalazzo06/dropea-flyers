@@ -149,6 +149,7 @@ const ESTADO_INICIAL = {
     qrX: 84,   // centro del QR en % del flyer (se mueve arrastrándolo)
     qrY: 72,
     qrZoom: 100,
+    tituloZoom: 100,   // tamaño de la letra del título (%)
     textoZoom: 100,    // tamaño de la letra del texto de apoyo (%)
     qrUbic: 'libre',   // 'libre' (se arrastra) | 'derecha' | 'izquierda' (columna propia, solo en Tarjeta)
     linkActivo: false,
@@ -173,10 +174,12 @@ function cargarEstado() {
             e.imagenes = base.map((d, i) => ({ ...d, ...(guardadas[i] || {}) }));
             if (typeof guardado.imagen === 'string' && guardado.imagen && !e.imagenes[0].src) e.imagenes[0].src = guardado.imagen;
             delete e.imagen;
+            // Posiciones de textos y logo (ver "MOVER TEXTOS Y LOGO"): se guardan por formato + estilo.
+            e.posiciones = (guardado.posiciones && typeof guardado.posiciones === 'object') ? guardado.posiciones : {};
             return e;
         }
     } catch (err) { /* storage bloqueado o JSON roto: arrancamos de cero */ }
-    return { ...ESTADO_INICIAL, imagenes: imagenesIniciales() };
+    return { ...ESTADO_INICIAL, imagenes: imagenesIniciales(), posiciones: {} };
 }
 
 function guardarEstado() {
@@ -283,9 +286,43 @@ async function cargarLogoDropea() {
 // claro = true -> versión blanca (para fondos oscuros)
 function logoHtml(dropea, claro, alto) {
     if (dropea && dropea.normal) {
-        return `<img src="${claro ? dropea.invertido : dropea.normal}" alt="Dropea" style="height:${px(alto)}; width:auto; display:block;" />`;
+        return `<img src="${claro ? dropea.invertido : dropea.normal}" alt="Dropea" draggable="false" style="height:${px(alto)}; width:auto; display:block; -webkit-user-drag:none; pointer-events:none;" />`;
     }
     return `<span style="display:block; font-size:${px(alto * 0.8)}; line-height:1; font-weight:800; font-style:italic; text-transform:uppercase; letter-spacing:-0.02em; color:${claro ? '#ffffff' : NEGRO_DROPEA};">Dropea</span>`;
+}
+
+// ------------------------------------------------------------
+// MOVER TEXTOS Y LOGO
+// Cada bloque movible se envuelve en un <div data-mover="clave"> con un
+// desplazamiento (x, y) en px de diseño respecto a donde lo acomoda la
+// plantilla. Se arrastra con mouse o con el dedo en la vista previa.
+// Las posiciones se guardan por formato + estilo, porque cada plantilla
+// ordena los bloques distinto.
+// ------------------------------------------------------------
+const CLAVES_MOVER = ['logo', 'etiqueta', 'titulo', 'destacado', 'texto', 'cta', 'pie'];
+const clavePos = (formato, plantilla) => `${formato}|${plantilla}`;
+
+function posicionesActuales() {
+    return (estado.posiciones && estado.posiciones[clavePos(estado.formato, estado.plantilla)]) || {};
+}
+
+// Versión editable (crea el objeto si todavía no existe)
+function posicionesEditables() {
+    if (!estado.posiciones || typeof estado.posiciones !== 'object') estado.posiciones = {};
+    const k = clavePos(estado.formato, estado.plantilla);
+    if (!estado.posiciones[k]) estado.posiciones[k] = {};
+    return estado.posiciones[k];
+}
+
+function transformMover(p) {
+    return `translate(${px((p && p.x) || 0)}, ${px((p && p.y) || 0)})`;
+}
+
+// Envuelve un bloque para poder arrastrarlo. Si el bloque está vacío no dibuja nada.
+function movible(c, clave, html, extra = '') {
+    if (!html) return '';
+    const p = (c.posiciones && c.posiciones[clave]) || null;
+    return `<div data-mover="${clave}" style="position:relative; z-index:7; max-width:100%; transform:${transformMover(p)}; cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; ${extra}">${html}</div>`;
 }
 
 // ------------------------------------------------------------
@@ -376,25 +413,30 @@ function pill(c, texto, { bg, color, borde = '', size = 11, tracking = '0.2em' }
     return `<span style="display:inline-block; background:${bg}; color:${color}; ${borde} border-radius:9999px; padding:${px(7 * u)} ${px(16 * u)}; font-size:${px(size * u)}; font-weight:800; letter-spacing:${tracking}; text-transform:uppercase; white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:ellipsis;">${esc(texto)}</span>`;
 }
 
-// Franja negra inferior con el sitio/usuario entre destellos
+// Franja negra inferior con el sitio/usuario entre destellos.
+// El grupo del texto se puede arrastrar: lleva su propio fondo negro para que se lea en cualquier lado.
 function barraPie(c) {
     const pie = c.campos.pie.trim();
     if (!pie) return '';
     const u = c.u;
-    return `
-        <div style="position:relative; z-index:2; background:${NEGRO_DROPEA}; border-radius:${px(26 * u)} ${px(26 * u)} 0 0; padding:${px(15 * u)} ${px(20 * u)} ${px(17 * u)}; display:flex; align-items:center; justify-content:center; gap:${px(10 * u)}; ${c.oscuro ? 'border-top:1px solid rgba(255,255,255,0.25);' : ''}">
+    const grupo = `
+        <div style="display:flex; align-items:center; justify-content:center; gap:${px(10 * u)}; background:${NEGRO_DROPEA}; border-radius:9999px; padding:${px(4 * u)} ${px(14 * u)};">
             ${chispa(c.acTexto, 12 * u)}
             <span style="color:#e4e4e7; font-size:${px(11 * u)}; font-weight:800; letter-spacing:0.2em; text-transform:uppercase; white-space:nowrap;">${esc(pie)}</span>
             ${chispa(c.acTexto, 12 * u)}
+        </div>`;
+    return `
+        <div style="position:relative; background:${NEGRO_DROPEA}; border-radius:${px(26 * u)} ${px(26 * u)} 0 0; padding:${px(11 * u)} ${px(20 * u)} ${px(13 * u)}; display:flex; align-items:center; justify-content:center; ${c.oscuro ? 'border-top:1px solid rgba(255,255,255,0.25);' : ''}">
+            ${movible(c, 'pie', grupo)}
         </div>`;
 }
 
 function cabecera(c, logoClaro, pillEstilo) {
     const u = c.u;
     return `
-        <div style="position:relative; z-index:3; display:flex; align-items:center; justify-content:space-between; gap:${px(10 * u)}; padding:${px(26 * u)} ${px(30 * u)} 0;">
-            ${logoHtml(c.dropea, logoClaro, 34 * u)}
-            ${pill(c, c.campos.etiqueta, pillEstilo)}
+        <div style="position:relative; display:flex; align-items:center; justify-content:space-between; gap:${px(10 * u)}; padding:${px(26 * u)} ${px(30 * u)} 0;">
+            ${movible(c, 'logo', logoHtml(c.dropea, logoClaro, 34 * u), 'flex-shrink:0;')}
+            ${movible(c, 'etiqueta', pill(c, c.campos.etiqueta, pillEstilo))}
         </div>`;
 }
 
@@ -424,7 +466,6 @@ function cajaLink(c) {
     return `
         <div style="position:absolute; z-index:5; left:0; right:0; bottom:${px(CAJA_LINK_BASE)}; display:flex; justify-content:center;">
             <div style="width:${px(c.W * 0.62)}; height:${px(CAJA_LINK_ALTO)}; background:#ffffff; border-radius:${px(16 * u)}; box-shadow:${px(5 * u)} ${px(5 * u)} 0 0 ${c.acTexto}; display:flex; align-items:center; justify-content:flex-start; padding-left:${px(16 * u)}; box-sizing:border-box;">
-                <svg width="${px(24 * u)}" height="${px(24 * u)}" viewBox="0 0 24 24" fill="none" stroke="${NEGRO_DROPEA}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>
             </div>
         </div>`;
 }
@@ -472,7 +513,7 @@ function zonaInferiorClara(c) {
     });
     const hayPie = !!c.campos.pie.trim();
     const franja = cta
-        ? `<div style="position:relative; z-index:2; display:flex; justify-content:center; padding:${px(16 * u)} ${px(24 * u)} ${hayPie ? px(16 * u) : px(24 * u)};">${cta}</div>`
+        ? `<div style="position:relative; display:flex; justify-content:center; padding:${px(16 * u)} ${px(24 * u)} ${hayPie ? px(16 * u) : px(24 * u)};">${movible(c, 'cta', cta)}</div>`
         : `<div style="height:${px(hayPie ? 16 * u : 24 * u)}; flex-shrink:0;"></div>`;
     return franja + barraPie(c);
 }
@@ -491,9 +532,9 @@ function flyerClaro(c) {
         : `display:inline-block; background:${acento}; color:${sobreAcento}; padding:0 0.16em; border-radius:0.14em; ${oscuro ? 'border:1px solid rgba(0,0,0,0.25);' : ''}`;
 
     const tarjeta = `
-        <div style="margin:${px(20 * u)} ${px(padX)} 0; flex:1; min-height:0; position:relative; z-index:2; background:#ffffff; border:3px solid ${NEGRO_DROPEA}; border-radius:${px(30 * u)}; box-shadow:${px(7 * u)} ${px(7 * u)} 0 0 ${oscuro ? 'rgba(255,255,255,0.35)' : NEGRO_DROPEA}; padding:${px(18 * u)}; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${px(12 * u)}; overflow:hidden;">
-            ${tituloHTML(c.lineas, tam, NEGRO_DROPEA, resaltado)}
-            ${textoHTML(c, '#3f3f46', 15 * u, 4)}
+        <div style="margin:${px(20 * u)} ${px(padX)} 0; flex:1; min-height:0; position:relative; background:#ffffff; border:3px solid ${NEGRO_DROPEA}; border-radius:${px(30 * u)}; box-shadow:${px(7 * u)} ${px(7 * u)} 0 0 ${oscuro ? 'rgba(255,255,255,0.35)' : NEGRO_DROPEA}; padding:${px(18 * u)}; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${px(12 * u)};">
+            ${movible(c, 'titulo', tituloHTML(c.lineas, tam * (c.tituloZoom || 100) / 100, NEGRO_DROPEA, resaltado))}
+            ${movible(c, 'texto', textoHTML(c, '#3f3f46', 15 * u, 4))}
         </div>`;
 
     return marco(c,
@@ -529,13 +570,13 @@ function flyerOscuro(c) {
         ${destello('#ffffff', 16 * u, `top:${px(H * 0.3)}; left:${px(30 * u)};`, 0.45)}
         ${destello(acTexto, 20 * u, `bottom:${px(H * 0.09)}; right:${px(36 * u)};`, 0.8)}
         ${cabecera(c, true, { bg: acTexto, color: NEGRO_DROPEA, size: 10 })}
-        <div style="position:relative; z-index:2; flex:1; min-height:0; padding:${px(12 * u)} ${px(padX)}; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${px(14 * u)};">
-            ${tituloHTML(c.lineas, tam, '#ffffff', resaltado)}
-            ${textoHTML(c, '#d4d4d8', 15 * u, 4)}
+        <div style="position:relative; flex:1; min-height:0; padding:${px(12 * u)} ${px(padX)}; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${px(14 * u)};">
+            ${movible(c, 'titulo', tituloHTML(c.lineas, tam * (c.tituloZoom || 100) / 100, '#ffffff', resaltado))}
+            ${movible(c, 'texto', textoHTML(c, '#d4d4d8', 15 * u, 4))}
         </div>
-        <div style="position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; gap:${px(10 * u)}; padding:${px(8 * u)} ${px(padX)} ${px(28 * u)};">
-            ${cta}
-            ${pie}
+        <div style="position:relative; display:flex; flex-direction:column; align-items:center; gap:${px(10 * u)}; padding:${px(8 * u)} ${px(padX)} ${px(28 * u)};">
+            ${movible(c, 'cta', cta)}
+            ${movible(c, 'pie', pie)}
         </div>
     `);
 }
@@ -566,10 +607,10 @@ function flyerOferta(c) {
         ${destello(sobreAcento, 46 * u, `top:${px(H * 0.12)}; right:${px(14 * u)};`)}
         ${destello(sobreAcento, 20 * u, `bottom:${px(H * 0.2)}; left:${px(24 * u)};`, 0.85)}
         ${cabecera(c, oscuro, { bg: NEGRO_DROPEA, color: acTexto, size: 10, borde: oscuro ? 'border:1px solid rgba(255,255,255,0.25);' : '' })}
-        <div style="position:relative; z-index:2; flex:1; min-height:0; padding:${px(10 * u)} ${px(padX)} 0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${px(14 * u)};">
-            ${tituloHTML(c.lineas, tam, sobreAcento, resaltado)}
-            ${bloque}
-            ${textoHTML(c, sobreAcento, 15 * u, 3)}
+        <div style="position:relative; flex:1; min-height:0; padding:${px(10 * u)} ${px(padX)} 0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${px(14 * u)};">
+            ${movible(c, 'titulo', tituloHTML(c.lineas, tam * (c.tituloZoom || 100) / 100, sobreAcento, resaltado))}
+            ${movible(c, 'destacado', bloque)}
+            ${movible(c, 'texto', textoHTML(c, sobreAcento, 15 * u, 3))}
         </div>
         ${zonaInferiorClara(c)}
     `);
@@ -618,7 +659,7 @@ function flyerFoto(c) {
         ? `<span style="color:#a1a1aa; font-size:${px(10 * u)}; font-weight:800; letter-spacing:0.2em; text-transform:uppercase; white-space:nowrap;">${esc(c.campos.pie.trim())}</span>`
         : '';
     const filaInferior = (cta || pie)
-        ? `<div style="display:flex; align-items:center; justify-content:center; gap:${px(12 * u)}; flex-wrap:nowrap;">${cta}${pie}</div>`
+        ? `<div style="display:flex; align-items:center; justify-content:center; gap:${px(12 * u)}; flex-wrap:nowrap;">${movible(c, 'cta', cta)}${movible(c, 'pie', pie)}</div>`
         : '';
 
     return marco(c, `background:${NEGRO_DROPEA};`, `
@@ -626,9 +667,9 @@ function flyerFoto(c) {
         ${destello(acTexto, 36 * u, `top:${px(H * 0.1)}; right:${px(90 * u)};`, 0.9)}
         ${cabecera(c, true, { bg: acTexto, color: NEGRO_DROPEA, size: 10 })}
         ${tarjetaFoto}
-        <div style="position:relative; z-index:2; padding:${px(16 * u)} ${px(padX)} ${px(24 * u)}; display:flex; flex-direction:column; align-items:center; gap:${px(8 * u)};">
-            ${tituloHTML(c.lineas, tam, '#ffffff', resaltado)}
-            ${textoHTML(c, '#d4d4d8', 13.5 * u, 2)}
+        <div style="position:relative; padding:${px(16 * u)} ${px(padX)} ${px(24 * u)}; display:flex; flex-direction:column; align-items:center; gap:${px(8 * u)};">
+            ${movible(c, 'titulo', tituloHTML(c.lineas, tam * (c.tituloZoom || 100) / 100, '#ffffff', resaltado))}
+            ${movible(c, 'texto', textoHTML(c, '#d4d4d8', 13.5 * u, 2))}
             ${filaInferior ? `<div style="margin-top:${px(4 * u)};">${filaInferior}</div>` : ''}
         </div>
     `);
@@ -690,10 +731,12 @@ async function render() {
         dropea, qr,
         plantilla: estado.plantilla,
         textoZoom: estado.textoZoom,
+        tituloZoom: estado.tituloZoom,
         qrX: estado.qrX, qrY: estado.qrY, qrZoom: estado.qrZoom,
         linkActivo: !!estado.linkActivo,
         fondoFoto: estado.fondoFoto !== false,
         imagenes: estado.imagenes,
+        posiciones: posicionesActuales(),
         lineas: parsearTitulo(estado.titulo),
         campos: {
             etiqueta: estado.etiqueta || '',
@@ -832,7 +875,7 @@ function construirControlesImagen() {
                 </div>
                 ${fila(i, 'zoom', 'Tamaño', 20, 300)}
                 <div class="flex items-center justify-between gap-3">
-                    <p class="campo-ayuda !mt-0">Arrastrala con el mouse en la vista previa para moverla.</p>
+                    <p class="campo-ayuda !mt-0">Arrastrala con el mouse o el dedo en la vista previa para moverla.</p>
                     <button type="button" class="btn-sec flex-shrink-0" data-centrar="${i}">Centrar</button>
                 </div>
             </div>
@@ -850,6 +893,8 @@ function llenarInputs() {
     $('chk-qr').checked = estado.qrActivo;
     $('in-qr-link').value = estado.qrLink;
     $('chk-link-historia').checked = !!estado.linkActivo;
+    $('in-titulo-zoom').value = estado.tituloZoom;
+    $('titulo-zoom-val').textContent = `${estado.tituloZoom}%`;
     $('in-texto-zoom').value = estado.textoZoom;
     $('texto-zoom-val').textContent = `${estado.textoZoom}%`;
     $('in-qr-zoom').value = estado.qrZoom;
@@ -983,6 +1028,7 @@ async function descargarFlyer() {
 
         const nodo = $('flyer-real');
         if (!nodo) throw new Error('No hay flyer para exportar.');
+        nodo.classList.add('exportando'); // sin contornos de "arrastrable" en el PNG
         const f = FORMATOS[estado.formato];
 
         // Misma receta que qr-cards.js: forzar la carga real de la fuente,
@@ -1054,6 +1100,8 @@ async function descargarFlyer() {
             mostrarToast('No se pudo generar la imagen. Probá de nuevo.', 'error');
         }
     } finally {
+        const flyerFinal = $('flyer-real');
+        if (flyerFinal) flyerFinal.classList.remove('exportando');
         btn.disabled = false;
         label.textContent = textoOriginal;
     }
@@ -1111,6 +1159,11 @@ function iniciar() {
         estado.qrUbic = b.dataset.qrubic;
         actualizar(true);
     });
+    $('in-titulo-zoom').addEventListener('input', (e) => {
+        estado.tituloZoom = Number(e.target.value);
+        $('titulo-zoom-val').textContent = `${estado.tituloZoom}%`;
+        actualizar();
+    });
     $('in-texto-zoom').addEventListener('input', (e) => {
         estado.textoZoom = Number(e.target.value);
         $('texto-zoom-val').textContent = `${estado.textoZoom}%`;
@@ -1124,6 +1177,11 @@ function iniciar() {
     $('btn-qr-reset').addEventListener('click', () => {
         estado.qrX = ESTADO_INICIAL.qrX; estado.qrY = ESTADO_INICIAL.qrY; estado.qrZoom = ESTADO_INICIAL.qrZoom; estado.qrUbic = ESTADO_INICIAL.qrUbic;
         llenarInputs();
+        actualizar(true);
+    });
+
+    $('btn-pos-reset').addEventListener('click', () => {
+        if (estado.posiciones) delete estado.posiciones[clavePos(estado.formato, estado.plantilla)];
         actualizar(true);
     });
 
@@ -1215,8 +1273,33 @@ function iniciar() {
         return (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) ? el : null;
     }
 
+    // Textos y logo: se arrastran con mouse o dedo. El centro del bloque no sale del flyer.
+    function empezarMoverBloque(e, el) {
+        const flyer = $('flyer-real');
+        if (!flyer) return false;
+        const caja = flyer.getBoundingClientRect();
+        const r = el.getBoundingClientRect();
+        const clave = el.dataset.mover;
+        const p = posicionesActuales()[clave] || {};
+        arrastre = {
+            mover: true, clave, el,
+            x: e.clientX, y: e.clientY,
+            ox: p.x || 0, oy: p.y || 0,
+            escala: (caja.width / FORMATOS[estado.formato].ancho) || 1,
+            minDx: caja.left - (r.left + r.width / 2), maxDx: caja.right - (r.left + r.width / 2),
+            minDy: caja.top - (r.top + r.height / 2),  maxDy: caja.bottom - (r.top + r.height / 2),
+        };
+        try { stage.setPointerCapture(e.pointerId); } catch (err) { /* sin captura */ }
+        el.style.cursor = 'grabbing';
+        el.classList.add('mover-arrastrando');
+        e.preventDefault();
+        return true;
+    }
+
     stage.addEventListener('pointerdown', (e) => {
         if (e.pointerType === 'mouse' && e.button !== 0) return;
+        const bloque = e.target.closest ? e.target.closest('#flyer-real [data-mover]') : null;
+        if (bloque && empezarMoverBloque(e, bloque)) return;
         const qrEl = qrBajoPuntero(e.clientX, e.clientY);
         if (qrEl) {
             const caja = $('flyer-real').getBoundingClientRect();
@@ -1243,6 +1326,18 @@ function iniciar() {
         e.preventDefault();
     });
     stage.addEventListener('pointermove', (e) => {
+        if (arrastre && arrastre.mover) {
+            const lim = (v, a, b) => Math.max(Math.min(a, b), Math.min(Math.max(a, b), v));
+            const dx = lim(e.clientX - arrastre.x, arrastre.minDx, arrastre.maxDx);
+            const dy = lim(e.clientY - arrastre.y, arrastre.minDy, arrastre.maxDy);
+            const pos = posicionesEditables();
+            pos[arrastre.clave] = {
+                x: Math.round((arrastre.ox + dx / arrastre.escala) * 10) / 10,
+                y: Math.round((arrastre.oy + dy / arrastre.escala) * 10) / 10,
+            };
+            arrastre.el.style.transform = transformMover(pos[arrastre.clave]);
+            return;
+        }
         if (!arrastre) {
             const sobreQR = qrBajoPuntero(e.clientX, e.clientY);
             stage.style.cursor = (sobreQR || (estado.plantilla === 'foto' && imagenBajoPuntero(e.clientX, e.clientY))) ? 'grab' : '';
@@ -1273,7 +1368,7 @@ function iniciar() {
     $('btn-descargar').addEventListener('click', descargarFlyer);
     $('btn-reset').addEventListener('click', () => {
         if (!confirm('¿Restablecer todo el contenido a los valores iniciales?')) return;
-        estado = { ...ESTADO_INICIAL, imagenes: imagenesIniciales() };
+        estado = { ...ESTADO_INICIAL, imagenes: imagenesIniciales(), posiciones: {} };
         llenarInputs();
         actualizar(true);
     });

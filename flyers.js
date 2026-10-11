@@ -149,6 +149,7 @@ const ESTADO_INICIAL = {
     qrX: 84,   // centro del QR en % del flyer (se mueve arrastrándolo)
     qrY: 72,
     qrZoom: 100,
+    textoZoom: 100,    // tamaño de la letra del texto de apoyo (%)
     qrUbic: 'libre',   // 'libre' (se arrastra) | 'derecha' | 'izquierda' (columna propia, solo en Tarjeta)
     linkActivo: false,
     fondoFoto: true,
@@ -363,6 +364,9 @@ function tituloHTML(lineas, tam, colorBase, estiloResaltado) {
 function textoHTML(c, color, tam, maxLineas) {
     const t = c.campos.texto.trim();
     if (!t) return '';
+    const z = (c.textoZoom || 100) / 100;
+    tam = tam * z;
+    maxLineas = Math.ceil(maxLineas * Math.max(1, z));
     return `<div style="color:${color}; font-size:${px(tam)}; font-weight:600; line-height:1.35; text-align:center; max-width:100%; display:-webkit-box; -webkit-line-clamp:${maxLineas}; -webkit-box-orient:vertical; overflow:hidden;">${esc(t).replace(/\n/g, '<br>')}</div>`;
 }
 
@@ -685,6 +689,7 @@ async function render() {
         condensada: CONDENSADAS.has(estado.fuente),
         dropea, qr,
         plantilla: estado.plantilla,
+        textoZoom: estado.textoZoom,
         qrX: estado.qrX, qrY: estado.qrY, qrZoom: estado.qrZoom,
         linkActivo: !!estado.linkActivo,
         fondoFoto: estado.fondoFoto !== false,
@@ -845,6 +850,8 @@ function llenarInputs() {
     $('chk-qr').checked = estado.qrActivo;
     $('in-qr-link').value = estado.qrLink;
     $('chk-link-historia').checked = !!estado.linkActivo;
+    $('in-texto-zoom').value = estado.textoZoom;
+    $('texto-zoom-val').textContent = `${estado.textoZoom}%`;
     $('in-qr-zoom').value = estado.qrZoom;
     $('qr-zoom-val').textContent = `${estado.qrZoom}%`;
     $('chk-fondo-foto').checked = estado.fondoFoto !== false;
@@ -1103,6 +1110,11 @@ function iniciar() {
         if (!b || !estado.qrActivo) return;
         estado.qrUbic = b.dataset.qrubic;
         actualizar(true);
+    });
+    $('in-texto-zoom').addEventListener('input', (e) => {
+        estado.textoZoom = Number(e.target.value);
+        $('texto-zoom-val').textContent = `${estado.textoZoom}%`;
+        actualizar();
     });
     $('in-qr-zoom').addEventListener('input', (e) => {
         estado.qrZoom = Number(e.target.value);

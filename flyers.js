@@ -14,13 +14,16 @@
 // ============================================================
 
 // ------------------------------------------------------------
-// FORMATOS (tamaño de diseño en px; se exporta a 1080 px de ancho)
+// FORMATOS (tamaño de diseño en px; se exporta a 1080 px de ancho,
+// salvo que el formato indique su propio anchoSalida)
 // ------------------------------------------------------------
 const ANCHO_SALIDA = 1080;
 const FORMATOS = {
     cuadrado: { label: 'Post cuadrado',  sub: '1080 × 1080 · feed',      ancho: 540, alto: 540, qrTam: 100, archivo: 'post-cuadrado' },
     vertical: { label: 'Post vertical',  sub: '1080 × 1350 · feed 4:5',  ancho: 432, alto: 540, qrTam: 116, archivo: 'post-vertical' },
     historia: { label: 'Historia',       sub: '1080 × 1920 · Stories',   ancho: 405, alto: 720, qrTam: 136, archivo: 'historia' },
+    // Tarjeta horizontal en formato presentación (16:9). Se diseña a 960 × 540 y se exporta al doble.
+    tarjeta:  { label: 'Tarjeta',        sub: '1920 × 1080 · presentación', ancho: 960, alto: 540, u: 1.1, qrTam: 110, archivo: 'tarjeta-presentacion', anchoSalida: 1920, nota: 'Se descarga en PNG de 1920 × 1080 px (formato presentación 16:9).' },
 };
 
 const PLANTILLAS = {
@@ -122,6 +125,14 @@ function cargarGoogleFonts() {
 // ESTADO (se guarda solo en el navegador para no perder el trabajo)
 // ------------------------------------------------------------
 const CLAVE_LS = 'dropea_flyers_estado_v1';
+
+// Cada imagen: ajuste 'llenar' (recorta para cubrir) o 'entera' (se ve completa),
+// tamaño (% sobre ese ajuste) y desplazamiento (ox, oy: % de la tarjeta, 0 = centrado).
+// El desplazamiento se cambia arrastrando la imagen en la vista previa.
+const imagenesIniciales = () => [
+    { src: '', ajuste: 'llenar', zoom: 100, ox: 0, oy: 0 },
+    { src: '', ajuste: 'entera', zoom: 45, ox: 23, oy: 23 },
+];
 const ESTADO_INICIAL = {
     formato: 'cuadrado',
     plantilla: 'claro',
@@ -135,7 +146,13 @@ const ESTADO_INICIAL = {
     pie: 'dropea.com.ar',
     qrActivo: false,
     qrLink: 'https://dropea.com.ar',
-    imagen: '',
+    qrX: 84,   // centro del QR en % del flyer (se mueve arrastrándolo)
+    qrY: 72,
+    qrZoom: 100,
+    qrUbic: 'libre',   // 'libre' (se arrastra) | 'derecha' | 'izquierda' (columna propia, solo en Tarjeta)
+    linkActivo: false,
+    fondoFoto: true,
+    imagenes: imagenesIniciales(),
 };
 
 let estado = cargarEstado();
@@ -149,18 +166,24 @@ function cargarEstado() {
             if (!PLANTILLAS[e.plantilla]) e.plantilla = ESTADO_INICIAL.plantilla;
             if (!PALETAS[e.paleta]) e.paleta = ESTADO_INICIAL.paleta;
             if (!FUENTES[e.fuente]) e.fuente = ESTADO_INICIAL.fuente;
+            // Imágenes: completa con valores por defecto y migra la versión vieja (una sola imagen)
+            const base = imagenesIniciales();
+            const guardadas = Array.isArray(guardado.imagenes) ? guardado.imagenes : [];
+            e.imagenes = base.map((d, i) => ({ ...d, ...(guardadas[i] || {}) }));
+            if (typeof guardado.imagen === 'string' && guardado.imagen && !e.imagenes[0].src) e.imagenes[0].src = guardado.imagen;
+            delete e.imagen;
             return e;
         }
     } catch (err) { /* storage bloqueado o JSON roto: arrancamos de cero */ }
-    return { ...ESTADO_INICIAL };
+    return { ...ESTADO_INICIAL, imagenes: imagenesIniciales() };
 }
 
 function guardarEstado() {
     try {
         localStorage.setItem(CLAVE_LS, JSON.stringify(estado));
     } catch (err) {
-        // Una foto grande puede no entrar: guardamos todo menos la imagen.
-        try { localStorage.setItem(CLAVE_LS, JSON.stringify({ ...estado, imagen: '' })); } catch (e2) { /* sin storage */ }
+        // Una foto grande puede no entrar: guardamos todo menos las imágenes.
+        try { localStorage.setItem(CLAVE_LS, JSON.stringify({ ...estado, imagenes: estado.imagenes.map(i => ({ ...i, src: '' })) })); } catch (e2) { /* sin storage */ }
     }
 }
 
@@ -387,8 +410,46 @@ function qrTarjeta(c, tam, sombra, borde = '') {
         </div>`;
 }
 
+// Caja vacía para el sticker de link de Instagram (solo en Historia).
+// Queda arriba de la zona que tapa la interfaz de Instagram.
+const CAJA_LINK_ALTO = 50;
+const CAJA_LINK_BASE = 96;
+function cajaLink(c) {
+    if (c.f !== FORMATOS.historia || !c.linkActivo) return '';
+    const u = c.u;
+    return `
+        <div style="position:absolute; z-index:5; left:0; right:0; bottom:${px(CAJA_LINK_BASE)}; display:flex; justify-content:center;">
+            <div style="width:${px(c.W * 0.62)}; height:${px(CAJA_LINK_ALTO)}; background:#ffffff; border-radius:${px(16 * u)}; box-shadow:${px(5 * u)} ${px(5 * u)} 0 0 ${c.acTexto}; display:flex; align-items:center; justify-content:flex-start; padding-left:${px(16 * u)}; box-sizing:border-box;">
+                <svg width="${px(24 * u)}" height="${px(24 * u)}" viewBox="0 0 24 24" fill="none" stroke="${NEGRO_DROPEA}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5"/></svg>
+            </div>
+        </div>`;
+}
+
+// QR flotante: no ocupa lugar en el diseño, se arrastra con el mouse en la vista previa.
+// (x, y) es el centro del QR en % del flyer.
+function qrFlotante(c) {
+    if (!c.qr) return '';
+    const claro = c.plantilla === 'claro' || c.plantilla === 'oferta';
+    const tam = c.f.qrTam * (c.qrZoom / 100);
+    const sombra = claro ? NEGRO_DROPEA : c.acTexto;
+    const borde = claro ? `border:3px solid ${NEGRO_DROPEA};` : '';
+    let x = c.qrX, y = c.qrY;
+    if (c.qrLado) {
+        const centro = c.qrLado === 'derecha' ? c.Wtotal - c.reserva / 2 : c.reserva / 2;
+        x = Math.round(centro / c.Wtotal * 1000) / 10;
+        y = 50;
+    }
+    return `<div data-qr="1" style="position:absolute; z-index:6; left:${x}%; top:${y}%; transform:translate(-50%, -50%); cursor:grab; touch-action:none; user-select:none;">${qrTarjeta(c, tam, sombra, borde)}</div>`;
+}
+
 function marco(c, fondoCSS, interior) {
-    return `<div style="width:${c.W}px; height:${c.H}px; position:relative; overflow:hidden; display:flex; flex-direction:column; ${c.estiloFuente} ${fondoCSS}">${interior}</div>`;
+    const reserva = cajaLink(c) ? `padding-bottom:${px(CAJA_LINK_BASE + CAJA_LINK_ALTO + 14)};` : '';
+    // Con QR en columna lateral, todo el contenido vive en el área que queda libre.
+    if (c.qrLado) {
+        const lado = c.qrLado === 'derecha' ? 'left:0;' : 'right:0;';
+        interior = `<div style="position:absolute; top:0; bottom:0; ${lado} width:${px(c.W)}; display:flex; flex-direction:column;">${interior}</div>`;
+    }
+    return `<div style="width:${c.Wtotal || c.W}px; height:${c.H}px; box-sizing:border-box; position:relative; overflow:hidden; display:flex; flex-direction:column; ${reserva} ${c.estiloFuente} ${fondoCSS}">${interior}${cajaLink(c)}${qrFlotante(c)}</div>`;
 }
 
 function glows(c) {
@@ -419,7 +480,7 @@ function flyerClaro(c) {
     const { W, H, u, acento, oscuro, acTexto, sobreAcento } = c;
     const padX = 30 * u;
     const tope = Math.min(W * 0.14, H * 0.095);
-    const tam = tamanoTitulo(c.lineas, W - padX * 2 - 56 * u, H * (c.qr ? 0.2 : 0.3), tope, c.condensada);
+    const tam = tamanoTitulo(c.lineas, W - padX * 2 - 56 * u, H * 0.3, tope, c.condensada);
     const muyClaro = luminanciaHex(acento) > 0.8; // sobre blanco no se vería
     const resaltado = muyClaro
         ? `display:inline-block; background:${NEGRO_DROPEA}; color:#ffffff; padding:0 0.16em; border-radius:0.14em;`
@@ -429,7 +490,6 @@ function flyerClaro(c) {
         <div style="margin:${px(20 * u)} ${px(padX)} 0; flex:1; min-height:0; position:relative; z-index:2; background:#ffffff; border:3px solid ${NEGRO_DROPEA}; border-radius:${px(30 * u)}; box-shadow:${px(7 * u)} ${px(7 * u)} 0 0 ${oscuro ? 'rgba(255,255,255,0.35)' : NEGRO_DROPEA}; padding:${px(18 * u)}; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${px(12 * u)}; overflow:hidden;">
             ${tituloHTML(c.lineas, tam, NEGRO_DROPEA, resaltado)}
             ${textoHTML(c, '#3f3f46', 15 * u, 4)}
-            ${c.qr ? qrSolo(c, c.f.qrTam) : ''}
         </div>`;
 
     return marco(c,
@@ -450,7 +510,7 @@ function flyerOscuro(c) {
     const { W, H, u, acTexto } = c;
     const padX = 34 * u;
     const tope = Math.min(W * 0.15, H * 0.1);
-    const tam = tamanoTitulo(c.lineas, W - padX * 2, H * (c.qr ? 0.22 : 0.34), tope, c.condensada);
+    const tam = tamanoTitulo(c.lineas, W - padX * 2, H * 0.34, tope, c.condensada);
     const resaltado = resaltadoSobreNegro(c);
     const hayPie = !!c.campos.pie.trim();
 
@@ -468,7 +528,6 @@ function flyerOscuro(c) {
         <div style="position:relative; z-index:2; flex:1; min-height:0; padding:${px(12 * u)} ${px(padX)}; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${px(14 * u)};">
             ${tituloHTML(c.lineas, tam, '#ffffff', resaltado)}
             ${textoHTML(c, '#d4d4d8', 15 * u, 4)}
-            ${c.qr ? qrTarjeta(c, c.f.qrTam, acTexto) : ''}
         </div>
         <div style="position:relative; z-index:2; display:flex; flex-direction:column; align-items:center; gap:${px(10 * u)}; padding:${px(8 * u)} ${px(padX)} ${px(28 * u)};">
             ${cta}
@@ -491,7 +550,7 @@ function flyerOferta(c) {
     const factor = c.condensada ? 0.5 : 0.7;
     const tamDest = Math.floor(Math.max(24, Math.min(
         W * 0.26,
-        H * (c.qr ? 0.16 : 0.22),
+        H * 0.22,
         (W - padX * 2 - 56 * u) / (Math.max(dest.length, 1) * factor)
     )));
     const bloque = dest ? `
@@ -507,7 +566,6 @@ function flyerOferta(c) {
             ${tituloHTML(c.lineas, tam, sobreAcento, resaltado)}
             ${bloque}
             ${textoHTML(c, sobreAcento, 15 * u, 3)}
-            ${c.qr ? qrTarjeta(c, c.f.qrTam, NEGRO_DROPEA, `border:3px solid ${NEGRO_DROPEA};`) : ''}
         </div>
         ${zonaInferiorClara(c)}
     `);
@@ -516,6 +574,10 @@ function flyerOferta(c) {
 // ------------------------------------------------------------
 // PLANTILLA 4: FOTO (imagen en tarjeta blanca sobre fondo negro)
 // ------------------------------------------------------------
+function transformImagen(im) {
+    return `translate(${im.ox}%, ${im.oy}%) scale(${im.zoom / 100})`;
+}
+
 function flyerFoto(c) {
     const { W, H, u, acTexto } = c;
     const padX = 30 * u;
@@ -524,18 +586,26 @@ function flyerFoto(c) {
     const resaltado = resaltadoSobreNegro(c);
     const hayPie = !!c.campos.pie.trim();
 
-    const interior = c.imagen
-        ? `<img src="${c.imagen}" style="width:100%; height:100%; object-fit:cover; display:block;" />`
+    const capas = (c.imagenes || []).map((im, idx) => {
+        if (!im.src) return '';
+        const z = im.zoom / 100;
+        const sombra = (im.ajuste === 'entera' || z < 1) ? `filter:drop-shadow(0 ${px(4 * u)} ${px(10 * u)} rgba(0,0,0,0.35));` : '';
+        return `<img src="${im.src}" data-capa="${idx}" data-ajuste="${im.ajuste}" draggable="false" style="position:absolute; inset:0; width:100%; height:100%; object-fit:${im.ajuste === 'llenar' ? 'cover' : 'contain'}; object-position:50% 50%; transform:${transformImagen(im)}; transform-origin:50% 50%; display:block; cursor:grab; touch-action:none; user-select:none; ${sombra}" />`;
+    }).join('');
+
+    // Sin fondo: las imágenes quedan sueltas sobre el negro, sin la tarjeta blanca.
+    const conFondo = c.fondoFoto || !capas;
+    const interior = capas
+        ? `<div style="position:relative; width:100%; height:100%; ${conFondo ? `overflow:hidden; background:${hexARgba(acTexto, 0.18)};` : 'overflow:visible;'}">${capas}</div>`
         : `<div style="width:100%; height:100%; background:${hexARgba(acTexto, 0.18)}; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${px(10 * u)};">
                ${chispa(acTexto, 46 * u)}
                <span style="color:#a1a1aa; font-size:${px(11 * u)}; font-weight:800; letter-spacing:0.18em; text-transform:uppercase;">Subí una imagen</span>
            </div>`;
 
     const tarjetaFoto = `
-        <div style="position:relative; z-index:2; flex:1; min-height:0; margin:${px(18 * u)} ${px(padX)} 0; background:#ffffff; border-radius:${px(30 * u)}; box-shadow:${px(7 * u)} ${px(7 * u)} 0 0 ${acTexto};">
-            <div style="position:absolute; inset:${px(10 * u)}; border-radius:${px(22 * u)}; overflow:hidden;">
+        <div style="position:relative; z-index:2; flex:1; min-height:0; margin:${px(18 * u)} ${px(padX)} 0; ${conFondo ? `background:#ffffff; border-radius:${px(30 * u)}; box-shadow:${px(7 * u)} ${px(7 * u)} 0 0 ${acTexto};` : ''}">
+            <div style="position:absolute; inset:${conFondo ? px(10 * u) : '0'}; ${conFondo ? `border-radius:${px(22 * u)}; overflow:hidden;` : ''}">
                 ${interior}
-                ${c.qr ? `<div style="position:absolute; right:${px(12 * u)}; bottom:${px(12 * u)};">${qrTarjeta(c, c.f.qrTam * 0.8, acTexto)}</div>` : ''}
             </div>
         </div>`;
 
@@ -600,15 +670,25 @@ async function render() {
 
     if (token !== tokenRender) return; // llegó un render más nuevo
 
+    // QR en columna propia (solo Tarjeta): se reserva ese ancho y el contenido usa el resto.
+    const lateral = !!qr && estado.formato === 'tarjeta' && estado.qrUbic !== 'libre';
+    const uQR = f.u || f.ancho / 480;
+    const reservaQR = lateral ? Math.round(f.qrTam * (estado.qrZoom / 100) + 96 * uQR) : 0;
+
     const contexto = {
-        f, W: f.ancho, H: f.alto, u: f.ancho / 480,
+        f, W: f.ancho - reservaQR, Wtotal: f.ancho, reserva: reservaQR, qrLado: lateral ? estado.qrUbic : '',
+        H: f.alto, u: f.u || f.ancho / 480,
         acento, oscuro,
         acTexto: oscuro ? '#ffffff' : acento,
         sobreAcento: oscuro ? '#ffffff' : NEGRO_DROPEA,
         estiloFuente: `font-family:${fuente.family};`,
         condensada: CONDENSADAS.has(estado.fuente),
         dropea, qr,
-        imagen: estado.imagen,
+        plantilla: estado.plantilla,
+        qrX: estado.qrX, qrY: estado.qrY, qrZoom: estado.qrZoom,
+        linkActivo: !!estado.linkActivo,
+        fondoFoto: estado.fondoFoto !== false,
+        imagenes: estado.imagenes,
         lineas: parsearTitulo(estado.titulo),
         campos: {
             etiqueta: estado.etiqueta || '',
@@ -695,12 +775,63 @@ function sincronizarControles() {
         el.classList.toggle('hidden', !lista.includes(estado.plantilla));
     });
 
+    document.querySelectorAll('[data-formatos]').forEach(el => {
+        el.classList.toggle('hidden', !el.dataset.formatos.split(',').includes(estado.formato));
+    });
+
+    $('nota-descarga').textContent = FORMATOS[estado.formato].nota || 'Se descarga en PNG de 1080 px de ancho.';
+
     $('in-qr-link').disabled = !estado.qrActivo;
+    $('in-qr-zoom').disabled = !estado.qrActivo;
+    document.querySelectorAll('[data-qrubic]').forEach(b => b.classList.toggle('tile-activo', b.dataset.qrubic === estado.qrUbic));
+    $('btn-qr-reset').disabled = !estado.qrActivo;
     $('qr-link-wrap').classList.toggle('opacity-50', !estado.qrActivo);
 
-    const hayImagen = !!estado.imagen;
-    $('btn-quitar-imagen').classList.toggle('hidden', !hayImagen);
-    $('nombre-imagen').textContent = hayImagen ? 'Imagen cargada' : 'Ninguna imagen seleccionada';
+    estado.imagenes.forEach((im, i) => {
+        const hay = !!im.src;
+        $(`btn-quitar-imagen-${i}`).classList.toggle('hidden', !hay);
+        $(`nombre-imagen-${i}`).textContent = hay ? 'Imagen cargada' : 'Ninguna imagen seleccionada';
+        $(`img-ajustes-${i}`).classList.toggle('hidden', !hay);
+        document.querySelectorAll(`[data-img="${i}"][data-ajuste]`).forEach(b => {
+            b.classList.toggle('tile-activo', b.dataset.ajuste === im.ajuste);
+        });
+        const r = $(`img-${i}-zoom`);
+        if (document.activeElement !== r) r.value = im.zoom;
+        $(`img-${i}-zoom-val`).textContent = `${im.zoom}%`;
+    });
+}
+
+// Arma los controles de las dos imágenes (subir, ajuste, tamaño y posición)
+function construirControlesImagen() {
+    const fila = (i, campo, etiqueta, min, max) => `
+        <div>
+            <div class="flex items-center justify-between">
+                <label class="campo-label !mb-0" for="img-${i}-${campo}">${etiqueta}</label>
+                <span id="img-${i}-${campo}-val" class="text-[0.7rem] font-bold text-slate-400"></span>
+            </div>
+            <input id="img-${i}-${campo}" data-img="${i}" data-campo="${campo}" type="range" min="${min}" max="${max}" step="1" class="rango">
+        </div>`;
+    $('imagenes-wrap').innerHTML = [0, 1].map(i => `
+        <div class="border border-slate-200 rounded-2xl p-3 bg-slate-50">
+            <div class="flex items-center gap-3 flex-wrap">
+                <span class="campo-label !mb-0">Imagen ${i + 1}${i === 1 ? ' (opcional)' : ''}</span>
+                <label for="in-imagen-${i}" class="btn-sec cursor-pointer">Subir</label>
+                <input id="in-imagen-${i}" data-img="${i}" type="file" accept="image/*" class="sr-only">
+                <span id="nombre-imagen-${i}" class="text-[0.7rem] font-semibold text-slate-400">Ninguna imagen seleccionada</span>
+                <button type="button" id="btn-quitar-imagen-${i}" data-quitar="${i}" class="btn-sec hidden">Quitar</button>
+            </div>
+            <div id="img-ajustes-${i}" class="hidden mt-3 flex flex-col gap-3">
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" class="tile" data-img="${i}" data-ajuste="llenar"><span class="tile-label">Llenar</span><span class="tile-sub">Recorta para cubrir todo</span></button>
+                    <button type="button" class="tile" data-img="${i}" data-ajuste="entera"><span class="tile-label">Entera</span><span class="tile-sub">Se ve completa, sin recortar</span></button>
+                </div>
+                ${fila(i, 'zoom', 'Tamaño', 20, 300)}
+                <div class="flex items-center justify-between gap-3">
+                    <p class="campo-ayuda !mt-0">Arrastrala con el mouse en la vista previa para moverla.</p>
+                    <button type="button" class="btn-sec flex-shrink-0" data-centrar="${i}">Centrar</button>
+                </div>
+            </div>
+        </div>`).join('');
 }
 
 // Vuelca el estado en los inputs (solo al iniciar o al restablecer)
@@ -713,6 +844,10 @@ function llenarInputs() {
     $('in-pie').value = estado.pie;
     $('chk-qr').checked = estado.qrActivo;
     $('in-qr-link').value = estado.qrLink;
+    $('chk-link-historia').checked = !!estado.linkActivo;
+    $('in-qr-zoom').value = estado.qrZoom;
+    $('qr-zoom-val').textContent = `${estado.qrZoom}%`;
+    $('chk-fondo-foto').checked = estado.fondoFoto !== false;
 }
 
 function actualizar(rapido = false) {
@@ -857,7 +992,7 @@ async function descargarFlyer() {
         }
 
         const opciones = {
-            pixelRatio: ANCHO_SALIDA / f.ancho,
+            pixelRatio: (f.anchoSalida || ANCHO_SALIDA) / f.ancho,
             backgroundColor: '#ffffff',
             style: { transform: 'none' },
             cacheBust: true,
@@ -923,6 +1058,7 @@ async function descargarFlyer() {
 function iniciar() {
     cargarGoogleFonts();
     construirTiles();
+    construirControlesImagen();
     llenarInputs();
     sincronizarControles();
 
@@ -962,17 +1098,48 @@ function iniciar() {
         $(id).addEventListener('input', (e) => { estado[clave] = e.target.value; actualizar(); });
     });
 
+    $('qr-link-wrap').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-qrubic]');
+        if (!b || !estado.qrActivo) return;
+        estado.qrUbic = b.dataset.qrubic;
+        actualizar(true);
+    });
+    $('in-qr-zoom').addEventListener('input', (e) => {
+        estado.qrZoom = Number(e.target.value);
+        $('qr-zoom-val').textContent = `${estado.qrZoom}%`;
+        actualizar();
+    });
+    $('btn-qr-reset').addEventListener('click', () => {
+        estado.qrX = ESTADO_INICIAL.qrX; estado.qrY = ESTADO_INICIAL.qrY; estado.qrZoom = ESTADO_INICIAL.qrZoom; estado.qrUbic = ESTADO_INICIAL.qrUbic;
+        llenarInputs();
+        actualizar(true);
+    });
+
+    $('chk-fondo-foto').addEventListener('change', (e) => {
+        estado.fondoFoto = e.target.checked;
+        actualizar(true);
+    });
+
+    $('chk-link-historia').addEventListener('change', (e) => {
+        estado.linkActivo = e.target.checked;
+        actualizar(true);
+    });
+
     $('chk-qr').addEventListener('change', (e) => {
         estado.qrActivo = e.target.checked;
         if (!estado.qrActivo) avisoQR(false);
         actualizar(true);
     });
 
-    $('in-imagen').addEventListener('change', async (e) => {
+    const wrapImg = $('imagenes-wrap');
+    wrapImg.addEventListener('change', async (e) => {
+        if (!e.target.matches('input[type="file"]')) return;
+        const n = Number(e.target.dataset.img);
         const archivo = e.target.files && e.target.files[0];
         if (!archivo) return;
         try {
-            estado.imagen = await leerImagen(archivo);
+            const src = await leerImagen(archivo);
+            estado.imagenes[n] = { ...imagenesIniciales()[n], src };
             if (estado.plantilla !== 'foto') estado.plantilla = 'foto';
             actualizar(true);
         } catch (err) {
@@ -981,15 +1148,120 @@ function iniciar() {
         }
         e.target.value = '';
     });
-    $('btn-quitar-imagen').addEventListener('click', () => {
-        estado.imagen = '';
-        actualizar(true);
+    wrapImg.addEventListener('click', (e) => {
+        const quitar = e.target.closest('[data-quitar]');
+        if (quitar) {
+            const n = Number(quitar.dataset.quitar);
+            estado.imagenes[n] = imagenesIniciales()[n];
+            actualizar(true);
+            return;
+        }
+        const centrar = e.target.closest('[data-centrar]');
+        if (centrar) {
+            const im = estado.imagenes[Number(centrar.dataset.centrar)];
+            im.ox = 0; im.oy = 0;
+            actualizar(true);
+            return;
+        }
+        const tile = e.target.closest('[data-ajuste]');
+        if (tile) {
+            estado.imagenes[Number(tile.dataset.img)].ajuste = tile.dataset.ajuste;
+            actualizar(true);
+        }
     });
+    wrapImg.addEventListener('input', (e) => {
+        const r = e.target.closest('input[type="range"]');
+        if (!r) return;
+        estado.imagenes[Number(r.dataset.img)][r.dataset.campo] = Number(r.value);
+        actualizar();
+    });
+
+    // ---- Arrastrar las imágenes con el mouse (o el dedo) en la vista previa ----
+    const stage = $('stage');
+    let arrastre = null;
+
+    // Devuelve la imagen que está realmente dibujada bajo el puntero (la de arriba primero).
+    function imagenBajoPuntero(cx, cy) {
+        const imgs = [...document.querySelectorAll('#flyer-real img[data-capa]')].reverse();
+        for (const el of imgs) {
+            const r = el.getBoundingClientRect();
+            let x0 = r.left, y0 = r.top, w = r.width, h = r.height;
+            if (el.dataset.ajuste === 'entera' && el.naturalWidth && el.naturalHeight) {
+                const k = Math.min(w / el.naturalWidth, h / el.naturalHeight);
+                const dw = el.naturalWidth * k, dh = el.naturalHeight * k;
+                x0 += (w - dw) / 2; y0 += (h - dh) / 2; w = dw; h = dh;
+            }
+            if (cx >= x0 && cx <= x0 + w && cy >= y0 && cy <= y0 + h) return el;
+        }
+        return null;
+    }
+
+    function qrBajoPuntero(cx, cy) {
+        const el = document.querySelector('#flyer-real [data-qr]');
+        if (!el) return null;
+        const r = el.getBoundingClientRect();
+        return (cx >= r.left && cx <= r.right && cy >= r.top && cy <= r.bottom) ? el : null;
+    }
+
+    stage.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        const qrEl = qrBajoPuntero(e.clientX, e.clientY);
+        if (qrEl) {
+            const caja = $('flyer-real').getBoundingClientRect();
+            if (estado.qrUbic !== 'libre') {
+                const r = qrEl.getBoundingClientRect();
+                estado.qrX = Math.round((r.left + r.width / 2 - caja.left) / caja.width * 1000) / 10;
+                estado.qrY = Math.round((r.top + r.height / 2 - caja.top) / caja.height * 1000) / 10;
+                estado.qrUbic = 'libre';
+            }
+            arrastre = { qr: true, el: qrEl, x: e.clientX, y: e.clientY, ox: estado.qrX, oy: estado.qrY, cw: caja.width, ch: caja.height };
+            try { stage.setPointerCapture(e.pointerId); } catch (err) { /* sin captura */ }
+            qrEl.style.cursor = 'grabbing';
+            e.preventDefault();
+            return;
+        }
+        if (estado.plantilla !== 'foto') return;
+        const el = imagenBajoPuntero(e.clientX, e.clientY);
+        if (!el) return;
+        const n = Number(el.dataset.capa);
+        const cont = el.parentElement.getBoundingClientRect();
+        arrastre = { n, el, x: e.clientX, y: e.clientY, ox: estado.imagenes[n].ox, oy: estado.imagenes[n].oy, cw: cont.width, ch: cont.height };
+        try { stage.setPointerCapture(e.pointerId); } catch (err) { /* sin captura */ }
+        el.style.cursor = 'grabbing';
+        e.preventDefault();
+    });
+    stage.addEventListener('pointermove', (e) => {
+        if (!arrastre) {
+            const sobreQR = qrBajoPuntero(e.clientX, e.clientY);
+            stage.style.cursor = (sobreQR || (estado.plantilla === 'foto' && imagenBajoPuntero(e.clientX, e.clientY))) ? 'grab' : '';
+            return;
+        }
+        if (arrastre.qr) {
+            const lim = (v) => Math.max(0, Math.min(100, Math.round(v * 10) / 10));
+            estado.qrX = lim(arrastre.ox + (e.clientX - arrastre.x) / arrastre.cw * 100);
+            estado.qrY = lim(arrastre.oy + (e.clientY - arrastre.y) / arrastre.ch * 100);
+            arrastre.el.style.left = `${estado.qrX}%`;
+            arrastre.el.style.top = `${estado.qrY}%`;
+            return;
+        }
+        const im = estado.imagenes[arrastre.n];
+        const limite = (v) => Math.max(-150, Math.min(150, v));
+        im.ox = Math.round(limite(arrastre.ox + (e.clientX - arrastre.x) / arrastre.cw * 100) * 10) / 10;
+        im.oy = Math.round(limite(arrastre.oy + (e.clientY - arrastre.y) / arrastre.ch * 100) * 10) / 10;
+        arrastre.el.style.transform = transformImagen(im);
+    });
+    const soltar = () => {
+        if (!arrastre) return;
+        arrastre = null;
+        actualizar(true);
+    };
+    stage.addEventListener('pointerup', soltar);
+    stage.addEventListener('pointercancel', soltar);
 
     $('btn-descargar').addEventListener('click', descargarFlyer);
     $('btn-reset').addEventListener('click', () => {
         if (!confirm('¿Restablecer todo el contenido a los valores iniciales?')) return;
-        estado = { ...ESTADO_INICIAL };
+        estado = { ...ESTADO_INICIAL, imagenes: imagenesIniciales() };
         llenarInputs();
         actualizar(true);
     });

@@ -149,6 +149,11 @@
                     <div>
                         <label class="campo-label" for="in-texto">Texto de apoyo</label>
                         <textarea id="in-texto" class="campo" rows="2" placeholder="Una o dos frases cortas"></textarea>
+                        <div class="flex items-center justify-between mt-2">
+                            <label class="campo-label !mb-0" for="in-texto-zoom">Tamaño de la letra</label>
+                            <span id="texto-zoom-val" class="text-[0.7rem] font-bold text-slate-400"></span>
+                        </div>
+                        <input id="in-texto-zoom" type="range" min="70" max="250" step="5" class="rango">
                     </div>
                     <div>
                         <label class="campo-label" for="in-cta">Botón</label>

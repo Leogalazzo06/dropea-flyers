@@ -154,7 +154,7 @@
                         </div>
                         <input id="in-titulo-zoom" type="range" min="50" max="300" step="5" class="rango">
                     </div>
-                    <div data-plantillas="oferta">
+                    <div data-plantillas="oferta,rayos,degradado,producto">
                         <label class="campo-label" for="in-destacado">Texto gigante (precio, descuento, fecha)</label>
                         <input id="in-destacado" class="campo" type="text" maxlength="14" placeholder="30% OFF">
                     </div>
@@ -168,6 +168,16 @@
                         <input id="in-texto-zoom" type="range" min="70" max="250" step="5" class="rango">
                     </div>
                     <div>
+                        <label class="campo-label" for="in-items">Lista de puntos</label>
+                        <textarea id="in-items" class="campo" rows="4" placeholder="✅ Sin comisiones por venta&#10;✅ Tu tienda online 24/7"></textarea>
+                        <p class="campo-ayuda">Un punto por renglón, separado del texto de apoyo. Si el renglón empieza con un emoji (✅, 🔥…) se usa como viñeta; si no, sale un punto. Los * o - del principio se ignoran.</p>
+                        <div class="flex items-center justify-between mt-2">
+                            <label class="campo-label !mb-0" for="in-items-zoom">Tamaño de la lista</label>
+                            <span id="items-zoom-val" class="text-[0.7rem] font-bold text-slate-400"></span>
+                        </div>
+                        <input id="in-items-zoom" type="range" min="50" max="200" step="5" class="rango">
+                    </div>
+                    <div>
                         <label class="campo-label" for="in-cta">Botón</label>
                         <input id="in-cta" class="campo" type="text" maxlength="32" placeholder="Conocé más">
                     </div>
@@ -176,6 +186,11 @@
                         <input id="in-pie" class="campo" type="text" maxlength="40" placeholder="dropea.com.ar">
                         <p class="campo-ayuda">Dejá un campo vacío y esa parte no aparece en el flyer.</p>
                     </div>
+                    <div data-formatos="cuadrado,vertical,historia">
+                        <label class="campo-label" for="in-legal">Letra chica (términos y condiciones)</label>
+                        <textarea id="in-legal" class="campo" rows="3" placeholder="Ej.: Prueba gratis de 15 días. Luego, plan mensual de $10.000."></textarea>
+                        <p class="campo-ayuda">Aparece abajo, en una franja negra con letra chica. Solo en posts e historias (no en la tarjeta). Dejalo vacío y no se muestra.</p>
+                    </div>
                     <div class="flex items-center justify-between gap-3 pt-3 border-t border-slate-100">
                         <p class="campo-ayuda !mt-0">Arrastrá los textos y el logo de Dropea en la vista previa (con el mouse o el dedo) para ponerlos donde quieras.</p>
                         <button type="button" id="btn-pos-reset" class="btn-sec flex-shrink-0">Reubicar</button>
@@ -183,9 +198,9 @@
                 </div>
             </section>
 
-            <section class="seccion" data-plantillas="foto">
+            <section class="seccion" data-plantillas="foto,producto">
                 <h2 class="seccion-titulo">Imagen</h2>
-                <div class="flex items-center justify-between gap-3 mb-3">
+                <div data-plantillas="foto" class="flex items-center justify-between gap-3 mb-3">
                     <div>
                         <p class="campo-label !mb-0.5">Fondo blanco de la tarjeta</p>
                         <p class="text-[0.68rem] font-semibold text-slate-400">Apagalo para que las imágenes queden sueltas sobre el fondo negro.</p>
@@ -291,5 +306,6 @@
     <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
 
     <script src="flyers.js"></script>
+    <script src="flyers-extra.js"></script>
 </body>
 </html>

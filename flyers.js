@@ -151,6 +151,9 @@ const ESTADO_INICIAL = {
     qrZoom: 100,
     tituloZoom: 100,   // tamaño de la letra del título (%)
     textoZoom: 100,    // tamaño de la letra del texto de apoyo (%)
+    items: '',          // lista de puntos (un renglón por punto)
+    itemsZoom: 100,
+    legal: '',          // letra chica de abajo (términos y condiciones), solo en posts e historias
     qrUbic: 'libre',   // 'libre' (se arrastra) | 'derecha' | 'izquierda' (columna propia, solo en Tarjeta)
     linkActivo: false,
     fondoFoto: true,
@@ -398,7 +401,32 @@ function tituloHTML(lineas, tam, colorBase, estiloResaltado) {
     return `<div style="font-weight:800; font-style:italic; text-transform:uppercase; letter-spacing:-0.02em; line-height:1.08; text-align:center; font-size:${px(tam)};">${filas}</div>`;
 }
 
+// Lista de puntos: un renglón por punto. Un emoji al inicio hace de viñeta; si no, se dibuja un punto.
+function parsearItems(t) {
+    return String(t || '').split('\n').map(s => s.trim().replace(/^[*\-•·]\s+/, '')).filter(Boolean).map(s => {
+        const m = s.match(/^(\p{Extended_Pictographic}(?:\uFE0F|\u200D\p{Extended_Pictographic})*)\s*/u);
+        return m ? { marca: m[1], texto: s.slice(m[0].length) } : { marca: '', texto: s };
+    }).filter(i => i.texto);
+}
+
+function itemsHTML(c, color, tam, alinear = 'center') {
+    const it = parsearItems(c.items);
+    if (!it.length) return '';
+    const t = tam * 0.95 * Math.max(0.72, 1 - 0.06 * (it.length - 2)) * ((c.itemsZoom || 100) / 100);
+    const filas = it.map(i => `<div style="display:flex; align-items:flex-start; gap:0.5em; color:${color}; font-size:${px(t)}; font-weight:600; line-height:1.3; text-align:left;">${i.marca
+        ? `<span style="flex-shrink:0; width:1.25em; text-align:center;">${esc(i.marca)}</span>`
+        : `<span style="flex-shrink:0; width:1.25em; display:flex; justify-content:center; padding-top:0.5em;"><span style="width:0.38em; height:0.38em; border-radius:9999px; background:${color};"></span></span>`}<span>${esc(i.texto)}</span></div>`).join('');
+    return `<div style="display:flex; flex-direction:column; gap:${px(t * 0.45)}; max-width:100%; ${alinear === 'center' ? 'align-self:center;' : ''}">${filas}</div>`;
+}
+
+// Texto de apoyo + lista de puntos (la lista va debajo y se mueve junto con el texto)
 function textoHTML(c, color, tam, maxLineas) {
+    const a = textoSoloHTML(c, color, tam, maxLineas), b = itemsHTML(c, color, tam);
+    if (!b) return a;
+    return `<div style="display:flex; flex-direction:column; align-items:center; gap:${px(8 * c.u)}; max-width:100%;">${a}${b}</div>`;
+}
+
+function textoSoloHTML(c, color, tam, maxLineas) {
     const t = c.campos.texto.trim();
     if (!t) return '';
     const z = (c.textoZoom || 100) / 100;
@@ -474,7 +502,7 @@ function cajaLink(c) {
 // (x, y) es el centro del QR en % del flyer.
 function qrFlotante(c) {
     if (!c.qr) return '';
-    const claro = c.plantilla === 'claro' || c.plantilla === 'oferta';
+    const claro = c.plantilla === 'claro' || c.plantilla === 'oferta' || c.plantilla === 'rayos' || c.plantilla === 'degradado';
     const tam = c.f.qrTam * (c.qrZoom / 100);
     const sombra = claro ? NEGRO_DROPEA : c.acTexto;
     const borde = claro ? `border:3px solid ${NEGRO_DROPEA};` : '';
@@ -487,14 +515,27 @@ function qrFlotante(c) {
     return `<div data-qr="1" style="position:absolute; z-index:6; left:${x}%; top:${y}%; transform:translate(-50%, -50%); cursor:grab; touch-action:none; user-select:none;">${qrTarjeta(c, tam, sombra, borde)}</div>`;
 }
 
+// Letra chica (términos y condiciones): franja negra al pie, solo en Post cuadrado, Post vertical e Historia.
+function legalInfo(c) {
+    const t = String(c.legal || '').trim();
+    if (!t || c.f === FORMATOS.tarjeta) return { alto: 0, html: '' };
+    const u = c.u, fs = 8.5 * u, pad = 14 * u;
+    const porLinea = Math.max(10, Math.floor((c.W - pad * 2) / (fs * 0.5)));
+    const lineas = Math.min(6, t.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / porLinea)), 0));
+    const alto = Math.round(lineas * fs * 1.35 + 12 * u);
+    return { alto, html: `<div style="position:absolute; z-index:6; left:0; right:0; bottom:0; height:${px(alto)}; box-sizing:border-box; padding:${px(6 * u)} ${px(pad)}; background:${NEGRO_DROPEA}; border-top:1px solid rgba(255,255,255,0.14); color:#a1a1aa; font-size:${px(fs)}; font-weight:600; line-height:1.35; text-align:center; overflow:hidden;">${esc(t).replace(/\n/g, '<br>')}</div>` };
+}
+
 function marco(c, fondoCSS, interior) {
-    const reserva = cajaLink(c) ? `padding-bottom:${px(CAJA_LINK_BASE + CAJA_LINK_ALTO + 14)};` : '';
+    const legal = legalInfo(c);
+    const pb = (cajaLink(c) ? CAJA_LINK_BASE + CAJA_LINK_ALTO + 14 : 0) + legal.alto;
+    const reserva = pb ? `padding-bottom:${px(pb)};` : '';
     // Con QR en columna lateral, todo el contenido vive en el área que queda libre.
     if (c.qrLado) {
         const lado = c.qrLado === 'derecha' ? 'left:0;' : 'right:0;';
         interior = `<div style="position:absolute; top:0; bottom:0; ${lado} width:${px(c.W)}; display:flex; flex-direction:column;">${interior}</div>`;
     }
-    return `<div style="width:${c.Wtotal || c.W}px; height:${c.H}px; box-sizing:border-box; position:relative; overflow:hidden; display:flex; flex-direction:column; ${reserva} ${c.estiloFuente} ${fondoCSS}">${interior}${cajaLink(c)}${qrFlotante(c)}</div>`;
+    return `<div style="width:${c.Wtotal || c.W}px; height:${c.H}px; box-sizing:border-box; position:relative; overflow:hidden; display:flex; flex-direction:column; ${reserva} ${c.estiloFuente} ${fondoCSS}">${interior}${cajaLink(c)}${qrFlotante(c)}${legal.html}</div>`;
 }
 
 function glows(c) {
@@ -731,6 +772,7 @@ async function render() {
         dropea, qr,
         plantilla: estado.plantilla,
         textoZoom: estado.textoZoom,
+        items: estado.items, itemsZoom: estado.itemsZoom, legal: estado.legal,
         tituloZoom: estado.tituloZoom,
         qrX: estado.qrX, qrY: estado.qrY, qrZoom: estado.qrZoom,
         linkActivo: !!estado.linkActivo,
@@ -809,6 +851,7 @@ function construirTiles() {
 function sincronizarControles() {
     Object.keys(FORMATOS).forEach(k => $(`tile-formato-${k}`).classList.toggle('tile-activo', k === estado.formato));
     Object.keys(PLANTILLAS).forEach(k => $(`tile-plantilla-${k}`).classList.toggle('tile-activo', k === estado.plantilla));
+    Object.keys(PLANTILLAS).forEach(k => { const sf = PLANTILLAS[k].soloFormato; $(`tile-plantilla-${k}`).style.display = (sf && sf !== estado.formato) ? 'none' : ''; });
     Object.keys(PALETAS).forEach(k => $(`color-${k}`).classList.toggle('swatch-activo', k === estado.paleta));
     Object.keys(FUENTES).forEach(k => $(`fuente-${k}`).classList.toggle('fuente-activa', k === estado.fuente));
 
@@ -887,6 +930,10 @@ function llenarInputs() {
     $('in-etiqueta').value = estado.etiqueta;
     $('in-titulo').value = estado.titulo;
     $('in-texto').value = estado.texto;
+    $('in-legal').value = estado.legal || '';
+    $('in-items').value = estado.items || '';
+    $('in-items-zoom').value = estado.itemsZoom;
+    $('items-zoom-val').textContent = `${estado.itemsZoom}%`;
     $('in-destacado').value = estado.destacado;
     $('in-cta').value = estado.cta;
     $('in-pie').value = estado.pie;
@@ -1121,12 +1168,15 @@ function iniciar() {
         const b = e.target.closest('[data-formato]');
         if (!b) return;
         estado.formato = b.dataset.formato;
+        { const sf = PLANTILLAS[estado.plantilla].soloFormato; if (sf && sf !== estado.formato) estado.plantilla = 'oscuro'; }
         actualizar(true);
     });
     $('tiles-plantilla').addEventListener('click', (e) => {
         const b = e.target.closest('[data-plantilla]');
         if (!b) return;
         estado.plantilla = b.dataset.plantilla;
+        if (typeof PLANTILLAS[estado.plantilla].alElegir === 'function') PLANTILLAS[estado.plantilla].alElegir();
+        llenarInputs();
         actualizar(true);
     });
     $('paleta-grid').addEventListener('click', (e) => {
@@ -1147,7 +1197,7 @@ function iniciar() {
 
     const campos = {
         'in-etiqueta': 'etiqueta', 'in-titulo': 'titulo', 'in-texto': 'texto',
-        'in-destacado': 'destacado', 'in-cta': 'cta', 'in-pie': 'pie', 'in-qr-link': 'qrLink',
+        'in-destacado': 'destacado', 'in-items': 'items', 'in-legal': 'legal', 'in-cta': 'cta', 'in-pie': 'pie', 'in-qr-link': 'qrLink',
     };
     Object.entries(campos).forEach(([id, clave]) => {
         $(id).addEventListener('input', (e) => { estado[clave] = e.target.value; actualizar(); });
@@ -1167,6 +1217,11 @@ function iniciar() {
     $('in-texto-zoom').addEventListener('input', (e) => {
         estado.textoZoom = Number(e.target.value);
         $('texto-zoom-val').textContent = `${estado.textoZoom}%`;
+        actualizar();
+    });
+    $('in-items-zoom').addEventListener('input', (e) => {
+        estado.itemsZoom = Number(e.target.value);
+        $('items-zoom-val').textContent = `${estado.itemsZoom}%`;
         actualizar();
     });
     $('in-qr-zoom').addEventListener('input', (e) => {
@@ -1210,7 +1265,8 @@ function iniciar() {
         try {
             const src = await leerImagen(archivo);
             estado.imagenes[n] = { ...imagenesIniciales()[n], src };
-            if (estado.plantilla !== 'foto') estado.plantilla = 'foto';
+            if (estado.plantilla === 'producto') Object.assign(estado.imagenes[n], { ajuste: 'entera', zoom: 75, ox: n ? 0 : 10, oy: 6 });
+            else if (estado.plantilla !== 'foto') estado.plantilla = 'foto';
             actualizar(true);
         } catch (err) {
             console.error(err);
@@ -1315,7 +1371,7 @@ function iniciar() {
             e.preventDefault();
             return;
         }
-        if (estado.plantilla !== 'foto') return;
+        if (estado.plantilla !== 'foto' && estado.plantilla !== 'producto') return;
         const el = imagenBajoPuntero(e.clientX, e.clientY);
         if (!el) return;
         const n = Number(el.dataset.capa);
@@ -1340,7 +1396,7 @@ function iniciar() {
         }
         if (!arrastre) {
             const sobreQR = qrBajoPuntero(e.clientX, e.clientY);
-            stage.style.cursor = (sobreQR || (estado.plantilla === 'foto' && imagenBajoPuntero(e.clientX, e.clientY))) ? 'grab' : '';
+            stage.style.cursor = (sobreQR || ((estado.plantilla === 'foto' || estado.plantilla === 'producto') && imagenBajoPuntero(e.clientX, e.clientY))) ? 'grab' : '';
             return;
         }
         if (arrastre.qr) {

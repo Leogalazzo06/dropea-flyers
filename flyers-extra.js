@@ -45,7 +45,7 @@ function flyerAurora(c) {
         ${cabecera(c, true, { bg: 'rgba(255,255,255,0.14)', color: '#ffffff', size: 10, borde: 'border:1px solid rgba(255,255,255,0.35);' })}
         <div style="position:relative; flex:1; min-height:0; margin:${px(18 * u)} ${px(padX)} 0; border-radius:${px(32 * u)}; background:linear-gradient(160deg, rgba(255,255,255,0.20), rgba(255,255,255,0.05)); border:1px solid rgba(255,255,255,0.32); box-shadow:inset 0 1px 0 rgba(255,255,255,0.4), 0 ${px(18 * u)} ${px(40 * u)} rgba(0,0,0,0.35); padding:${px(18 * u)}; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${px(12 * u)};">
             ${movible(c, 'titulo', tituloExtra(c, tam * (c.tituloZoom || 100) / 100, '#ffffff', resaltadoSobreNegro(c), { italic: false, ls: '-0.03em' }))}
-            ${movible(c, 'texto', textoHTML(c, '#e4e4e7', 15 * u, 4))}
+            ${apoyoTextoHTML(c, '#e4e4e7', 15 * u, 4)}
         </div>
         <div style="position:relative; display:flex; flex-direction:column; align-items:center; gap:${px(9 * u)}; padding:${px(16 * u)} ${px(padX)} ${px(24 * u)};">
             ${movible(c, 'cta', cta)}${movible(c, 'pie', pieTexto(c, '#d4d4d8'))}
@@ -92,7 +92,7 @@ function flyerCinta(c) {
         <div style="position:relative; padding:${px(24 * u)} ${px(padX)} 0;">${movible(c, 'logo', logoHtml(c.dropea, true, 32 * u), 'flex-shrink:0;')}</div>
         <div style="position:relative; flex:1; min-height:0; padding:${px(H * 0.12)} ${px(padX)} ${px(H * 0.17)}; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${px(14 * u)};">
             ${movible(c, 'titulo', tituloExtra(c, tam * (c.tituloZoom || 100) / 100, '#ffffff', resaltadoSobreNegro(c)))}
-            ${movible(c, 'texto', textoHTML(c, '#d4d4d8', 15 * u, 3))}
+            ${apoyoTextoHTML(c, '#d4d4d8', 15 * u, 3)}
             ${movible(c, 'cta', cta)}
         </div>`);
 }
@@ -108,7 +108,8 @@ function flyerDegradado(c) {
     const dest = c.campos.destacado.trim();
     const tf = Math.floor(Math.min(W * 0.1, (W - padX * 2 - 40 * u) / (Math.max(dest.length, 1) * 0.7)));
     const sticker = dest ? `<div style="display:inline-block; transform:rotate(-5deg); background:${K}; color:#ffffff; border-radius:9999px; padding:${px(4 * u)} ${px(18 * u)}; font-weight:800; font-style:italic; text-transform:uppercase; letter-spacing:-0.02em; white-space:nowrap; font-size:${px(tf)};">${esc(dest)}</div>` : '';
-    const txt = c.campos.texto.trim() ? `<div style="color:${t}; font-size:${px(15 * u * (c.textoZoom || 100) / 100)}; font-weight:600; line-height:1.35; max-width:${px(W * 0.82)};">${esc(c.campos.texto.trim()).replace(/\n/g, '<br>')}</div>` : '';
+    const txtDe = (s) => s.trim() ? `<div style="color:${t}; font-size:${px(15 * u * (c.textoZoom || 100) / 100)}; font-weight:600; line-height:1.35; max-width:${px(W * 0.82)};">${esc(s.trim()).replace(/\n/g, '<br>')}</div>` : '';
+    const txt = txtDe(c.campos.texto);
     const cta = pill(c, c.campos.cta, { bg: t, color: inv, size: 11, tracking: '0.16em' });
     const fila = (cta || c.campos.pie.trim()) ? `<div style="display:flex; align-items:center; gap:${px(14 * u)};">${movible(c, 'cta', cta)}${movible(c, 'pie', pieTexto(c, t))}</div>` : '';
     return marco(c, `background:linear-gradient(150deg, ${acento}, ${rotarHex(acento, 40, -0.05)});`, `
@@ -118,7 +119,7 @@ function flyerDegradado(c) {
         <div style="position:relative; flex:1; min-height:0; padding:${px(10 * u)} ${px(padX)} ${px(30 * u)}; display:flex; flex-direction:column; align-items:flex-start; justify-content:flex-end; gap:${px(14 * u)};">
             ${movible(c, 'destacado', sticker)}
             ${movible(c, 'titulo', tituloExtra(c, tam, t, res, { italic: false, align: 'left', ls: '-0.04em', lh: 0.98 }))}
-            ${movible(c, 'texto', juntarColumna(u, txt, itemsHTML(c, t, 15 * u, 'left')))}
+            ${apoyoMovible(c, txtDe, itemsHTML(c, t, 15 * u, 'left'), (a, b) => juntarColumna(u, a, b))}
             ${fila}
         </div>`);
 }
@@ -146,24 +147,36 @@ function flyerProducto(c) {
     const tp = Math.floor(Math.min(H * 0.1, (col - padX - 60 * u) / (Math.max(dest.length, 1) * (c.condensada ? 0.5 : 0.68))));
     const precio = dest ? `<div style="display:inline-block; border:${px(2 * u)} solid ${acTexto}; border-radius:${px(22 * u)}; background:${K}; padding:${px(10 * u)} ${px(22 * u)} ${px(12 * u)}; box-shadow:0 0 ${px(24 * u)} ${hexARgba(acTexto, 0.25)};">${cap ? `<div style="color:#ffffff; font-size:${px(13 * u)}; font-weight:600; margin-bottom:${px(2 * u)};">${esc(cap)}</div>` : ''}<div style="color:#ffffff; font-weight:800; font-style:italic; line-height:1; white-space:nowrap; font-size:${px(tp)};">${esc(dest)}</div></div>` : '';
     const cuotas = c.campos.cta.trim() ? `<div style="display:flex; align-items:center; gap:${px(8 * u)}; color:#ffffff; font-size:${px(13 * u)}; font-weight:800; line-height:1.2;"><svg width="${px(22 * u)}" height="${px(22 * u)}" viewBox="0 0 24 24" fill="none" stroke="${acTexto}" stroke-width="2" stroke-linecap="round" style="flex-shrink:0;"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M2 10h20"/></svg><span>${esc(c.campos.cta.trim())}</span></div>` : '';
-    const items = c.campos.texto.split('\n').map(s => s.trim()).filter(Boolean);
-    const lista = items.length ? `<div style="display:flex; flex-direction:column; gap:${px(5 * u)};">${items.map(i => `<div style="display:flex; gap:${px(8 * u)}; align-items:flex-start; color:#e4e4e7; font-size:${px(13 * u * (c.textoZoom || 100) / 100)}; font-weight:600; line-height:1.25;"><span style="width:${px(5 * u)}; height:${px(5 * u)}; margin-top:${px(6 * u)}; border-radius:9999px; background:${acTexto}; flex-shrink:0;"></span><span>${esc(i)}</span></div>`).join('')}</div>` : '';
-    const capas = (c.imagenes || []).map((im, i) => im.src
-        ? `<img src="${im.src}" data-capa="${i}" data-ajuste="${im.ajuste}" draggable="false" style="position:absolute; inset:0; width:100%; height:100%; object-fit:${im.ajuste === 'llenar' ? 'cover' : 'contain'}; transform:${transformImagen(im)}; transform-origin:50% 50%; display:block; cursor:grab; touch-action:none; user-select:none; filter:drop-shadow(0 ${px(10 * u)} ${px(18 * u)} rgba(0,0,0,0.5));" />` : '').join('');
+    const apoyoDe = (texto) => {
+        const items = texto.split('\n').map(s => s.trim()).filter(Boolean);
+        const lista = items.length ? `<div style="display:flex; flex-direction:column; gap:${px(5 * u)};">${items.map(i => `<div style="display:flex; gap:${px(8 * u)}; align-items:flex-start; color:#e4e4e7; font-size:${px(13 * u * (c.textoZoom || 100) / 100)}; font-weight:600; line-height:1.25;"><span style="width:${px(5 * u)}; height:${px(5 * u)}; margin-top:${px(6 * u)}; border-radius:9999px; background:${acTexto}; flex-shrink:0;"></span><span>${esc(i)}</span></div>`).join('')}</div>` : '';
+        const parrafo = texto.trim() ? `<div style="color:#e4e4e7; font-size:${px(13 * u * (c.textoZoom || 100) / 100)}; font-weight:600; line-height:1.35; max-width:${px(col - padX)};">${esc(texto.trim()).replace(/\n/g, '<br>')}</div>` : '';
+        return c.vinetas === false ? parrafo : lista;
+    };
+    const sombraProd = `filter:drop-shadow(0 ${px(10 * u)} ${px(18 * u)} rgba(0,0,0,0.5));`;
+    const capas = (c.imagenes || []).map((im, i) => im.src ? capaImagen(im, i, u, sombraProd, acTexto) : '').join('');
     const foto = capas || `<div style="position:absolute; inset:0; border:${px(2 * u)} dashed ${hexARgba(acTexto, 0.5)}; border-radius:${px(24 * u)}; display:flex; align-items:center; justify-content:center; color:#a1a1aa; font-size:${px(11 * u)}; font-weight:800; letter-spacing:0.16em; text-transform:uppercase; text-align:center; padding:${px(10 * u)};">Subí la foto del producto<br>(mejor PNG sin fondo)</div>`;
-    const anillo = W * 0.78;
+    // Aro brillante: sigue a la primera imagen cargada (posición, tamaño y giro). Sin imagen, queda el aro de siempre.
+    const cajaFoto = { x: W * 0.34, y: H * 0.28, w: W * 0.66, h: H * 0.5 };
+    const imAro = (c.imagenes || []).find(im => im.src);
+    let aro = { cx: W * 0.68, cy: H * 0.6, w: W * 0.78, h: W * 0.78 * 0.6, rot: -12 };
+    if (imAro) {
+        const g = geometriaImagen(imAro, cajaFoto.w, cajaFoto.h), k = (imAro.aro == null ? 100 : imAro.aro) / 100;
+        aro = { cx: cajaFoto.x + g.cx, cy: cajaFoto.y + g.cy, w: Math.max(g.w * 1.2 * k, 1), h: Math.max(g.h * 1.2 * k, 1), rot: imAro.rot || 0 };
+    }
+    const mostrarAro = !imAro || (imAro.aro == null ? 100 : imAro.aro) > 0;
     return marco(c, `background:${K};`, `
         <div style="position:absolute; left:0; top:0; width:55%; height:45%; ${estiloPuntos('rgba(255,255,255,0.10)', 1.3, 10)}"></div>
         <div style="position:absolute; top:-${px(W * 0.3)}; right:-${px(W * 0.3)}; width:${px(W)}; height:${px(W)}; border-radius:9999px; background:radial-gradient(closest-side, ${hexARgba(acTexto, 0.55)}, transparent);"></div>
         <div style="position:absolute; left:${px(padX * 0.5)}; top:${px(H * 0.2)}; font-size:${px(W * 0.2)}; font-weight:800; font-style:italic; text-transform:uppercase; line-height:0.9; letter-spacing:-0.03em; color:rgba(255,255,255,0.04); white-space:nowrap;">${esc(c.campos.pie.trim() || 'Dropea')}</div>
-        <div style="position:absolute; z-index:1; left:${px(W * 0.68 - anillo / 2)}; top:${px(H * 0.6 - anillo * 0.3)}; width:${px(anillo)}; height:${px(anillo * 0.6)}; border-radius:9999px; border:${px(16 * u)} solid ${acTexto}; box-shadow:0 0 ${px(40 * u)} ${hexARgba(acTexto, 0.6)}, inset 0 0 ${px(30 * u)} ${hexARgba(acTexto, 0.4)}; transform:rotate(-12deg);"></div>
+        ${mostrarAro ? `<div style="position:absolute; z-index:1; left:${px(aro.cx - aro.w / 2)}; top:${px(aro.cy - aro.h / 2)}; width:${px(aro.w)}; height:${px(aro.h)}; box-sizing:border-box; border-radius:9999px; border:${px(16 * u)} solid ${acTexto}; box-shadow:0 0 ${px(40 * u)} ${hexARgba(acTexto, 0.6)}, inset 0 0 ${px(30 * u)} ${hexARgba(acTexto, 0.4)}; transform:rotate(${aro.rot}deg);"></div>` : ''}
         <div style="position:absolute; z-index:3; left:${px(W * 0.34)}; top:${px(H * 0.28)}; width:${px(W * 0.66)}; height:${px(H * 0.5)};">${foto}</div>
         <div style="position:relative; display:flex; justify-content:center; padding:${px(24 * u)} ${padX}px 0;">${movible(c, 'logo', logoHtml(c.dropea, true, 30 * u), 'flex-shrink:0;')}</div>
         <div style="position:relative; flex:1; min-height:0; width:${px(col)}; padding:${px(H * 0.04)} 0 ${px(18 * u)} ${px(padX)}; display:flex; flex-direction:column; align-items:flex-start; gap:${px(12 * u)};">
             ${movible(c, 'titulo', `<div style="display:flex; flex-direction:column; gap:${px(8 * u)};">${encabezado}${gigante}</div>`)}
             ${movible(c, 'destacado', precio)}
             ${movible(c, 'cta', cuotas)}
-            ${movible(c, 'texto', juntarColumna(u, lista, itemsHTML(c, '#e4e4e7', 13 * u, 'left')))}
+            ${apoyoMovible(c, apoyoDe, itemsHTML(c, '#e4e4e7', 13 * u, 'left'), (a, b) => juntarColumna(u, a, b))}
             <div style="flex:1;"></div>
         </div>
         <div style="position:relative; display:flex; justify-content:center; padding:0 ${padX}px ${px(22 * u)};">${movible(c, 'pie', pieTexto(c, '#ffffff', 11))}</div>`);
@@ -179,7 +192,8 @@ function flyerTarjetaDropea(c) {
     const tam = tamanoTitulo(c.lineas, W - padX * 2, H * 0.27, Math.min(W * 0.085, H * 0.11), c.condensada) * (c.tituloZoom || 100) / 100;
     const cta = pill(c, c.campos.cta, { bg: acTexto, color: K, size: 11, tracking: '0.16em' });
     const fila = (cta || c.campos.pie.trim()) ? `<div style="display:flex; align-items:center; gap:${px(16 * u)};">${movible(c, 'cta', cta)}${movible(c, 'pie', pieTexto(c, '#a1a1aa'))}</div>` : '';
-    const txt = c.campos.texto.trim() ? `<div style="color:#d4d4d8; font-size:${px(16 * u * (c.textoZoom || 100) / 100)}; font-weight:600; line-height:1.35; max-width:${px(W * 0.8)};">${esc(c.campos.texto.trim()).replace(/\n/g, '<br>')}</div>` : '';
+    const txtDe = (s) => s.trim() ? `<div style="color:#d4d4d8; font-size:${px(16 * u * (c.textoZoom || 100) / 100)}; font-weight:600; line-height:1.35; max-width:${px(W * 0.8)};">${esc(s.trim()).replace(/\n/g, '<br>')}</div>` : '';
+    const txt = txtDe(c.campos.texto);
     let panel = '';
     if (c.qrLado) {
         const izq = c.qrLado === 'izquierda';
@@ -195,7 +209,7 @@ function flyerTarjetaDropea(c) {
         ${cabecera(c, true, { bg: acTexto, color: K, size: 10 })}
         <div style="position:relative; flex:1; min-height:0; padding:${px(10 * u)} ${px(padX)} ${px(28 * u)}; display:flex; flex-direction:column; justify-content:center; align-items:flex-start; gap:${px(12 * u)};">
             ${movible(c, 'titulo', tituloExtra(c, tam, '#ffffff', resaltadoSobreNegro(c), { align: 'left' }))}
-            ${movible(c, 'texto', juntarColumna(u, txt, itemsHTML(c, '#ffffff', 15 * u, 'left')))}
+            ${apoyoMovible(c, txtDe, itemsHTML(c, '#ffffff', 15 * u, 'left'), (a, b) => juntarColumna(u, a, b))}
             ${fila}
         </div>`);
 }

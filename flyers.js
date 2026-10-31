@@ -130,8 +130,8 @@ const CLAVE_LS = 'dropea_flyers_estado_v1';
 // tamaño (% sobre ese ajuste) y desplazamiento (ox, oy: % de la tarjeta, 0 = centrado).
 // El desplazamiento se cambia arrastrando la imagen en la vista previa.
 const imagenesIniciales = () => [
-    { src: '', ajuste: 'llenar', zoom: 100, ox: 0, oy: 0 },
-    { src: '', ajuste: 'entera', zoom: 45, ox: 23, oy: 23 },
+    { src: '', ajuste: 'llenar', zoom: 100, ox: 0, oy: 0, rot: 0, radio: 0, contorno: 0, aro: 100, ar: 0 },
+    { src: '', ajuste: 'entera', zoom: 45, ox: 23, oy: 23, rot: 0, radio: 0, contorno: 0, aro: 100, ar: 0 },
 ];
 const ESTADO_INICIAL = {
     formato: 'cuadrado',
@@ -157,6 +157,8 @@ const ESTADO_INICIAL = {
     qrUbic: 'libre',   // 'libre' (se arrastra) | 'derecha' | 'izquierda' (columna propia, solo en Tarjeta)
     linkActivo: false,
     fondoFoto: true,
+    bloques: false,    // texto de apoyo dividido en bloques movibles (un párrafo por bloque + la lista aparte)
+    vinetas: true,     // Producto: el texto de apoyo sale como lista con viñetas (si no, como texto corrido)
     imagenes: imagenesIniciales(),
 };
 
@@ -426,8 +428,22 @@ function textoHTML(c, color, tam, maxLineas) {
     return `<div style="display:flex; flex-direction:column; align-items:center; gap:${px(8 * c.u)}; max-width:100%;">${a}${b}</div>`;
 }
 
-function textoSoloHTML(c, color, tam, maxLineas) {
-    const t = c.campos.texto.trim();
+// Texto de apoyo + lista de puntos como UN bloque movible (por defecto) o, con "Separar en bloques",
+// un bloque por párrafo (los separa un renglón en blanco) y la lista de puntos aparte.
+// fn(texto) arma el HTML de un trozo de texto; juntar(a, b) une texto y lista en modo bloque único.
+function apoyoMovible(c, fn, itemsHtml, juntar) {
+    const texto = c.campos.texto || '';
+    if (!c.bloques) return movible(c, 'texto', juntar(fn(texto), itemsHtml));
+    const ps = texto.split(/\n\s*\n/).map(s => s.trim()).filter(Boolean);
+    return ps.map((p, i) => movible(c, i ? `texto${i + 1}` : 'texto', fn(p))).join('') + movible(c, 'items', itemsHtml);
+}
+function apoyoTextoHTML(c, color, tam, maxLineas) {
+    return apoyoMovible(c, s => textoSoloHTML(c, color, tam, maxLineas, s), itemsHTML(c, color, tam),
+        (a, b) => !b ? a : `<div style="display:flex; flex-direction:column; align-items:center; gap:${px(8 * c.u)}; max-width:100%;">${a}${b}</div>`);
+}
+
+function textoSoloHTML(c, color, tam, maxLineas, texto) {
+    const t = (texto == null ? c.campos.texto : texto).trim();
     if (!t) return '';
     const z = (c.textoZoom || 100) / 100;
     tam = tam * z;
@@ -575,7 +591,7 @@ function flyerClaro(c) {
     const tarjeta = `
         <div style="margin:${px(20 * u)} ${px(padX)} 0; flex:1; min-height:0; position:relative; background:#ffffff; border:3px solid ${NEGRO_DROPEA}; border-radius:${px(30 * u)}; box-shadow:${px(7 * u)} ${px(7 * u)} 0 0 ${oscuro ? 'rgba(255,255,255,0.35)' : NEGRO_DROPEA}; padding:${px(18 * u)}; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${px(12 * u)};">
             ${movible(c, 'titulo', tituloHTML(c.lineas, tam * (c.tituloZoom || 100) / 100, NEGRO_DROPEA, resaltado))}
-            ${movible(c, 'texto', textoHTML(c, '#3f3f46', 15 * u, 4))}
+            ${apoyoTextoHTML(c, '#3f3f46', 15 * u, 4)}
         </div>`;
 
     return marco(c,
@@ -613,7 +629,7 @@ function flyerOscuro(c) {
         ${cabecera(c, true, { bg: acTexto, color: NEGRO_DROPEA, size: 10 })}
         <div style="position:relative; flex:1; min-height:0; padding:${px(12 * u)} ${px(padX)}; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${px(14 * u)};">
             ${movible(c, 'titulo', tituloHTML(c.lineas, tam * (c.tituloZoom || 100) / 100, '#ffffff', resaltado))}
-            ${movible(c, 'texto', textoHTML(c, '#d4d4d8', 15 * u, 4))}
+            ${apoyoTextoHTML(c, '#d4d4d8', 15 * u, 4)}
         </div>
         <div style="position:relative; display:flex; flex-direction:column; align-items:center; gap:${px(10 * u)}; padding:${px(8 * u)} ${px(padX)} ${px(28 * u)};">
             ${movible(c, 'cta', cta)}
@@ -651,7 +667,7 @@ function flyerOferta(c) {
         <div style="position:relative; flex:1; min-height:0; padding:${px(10 * u)} ${px(padX)} 0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${px(14 * u)};">
             ${movible(c, 'titulo', tituloHTML(c.lineas, tam * (c.tituloZoom || 100) / 100, sobreAcento, resaltado))}
             ${movible(c, 'destacado', bloque)}
-            ${movible(c, 'texto', textoHTML(c, sobreAcento, 15 * u, 3))}
+            ${apoyoTextoHTML(c, sobreAcento, 15 * u, 3)}
         </div>
         ${zonaInferiorClara(c)}
     `);
@@ -661,7 +677,42 @@ function flyerOferta(c) {
 // PLANTILLA 4: FOTO (imagen en tarjeta blanca sobre fondo negro)
 // ------------------------------------------------------------
 function transformImagen(im) {
-    return `translate(${im.ox}%, ${im.oy}%) scale(${im.zoom / 100})`;
+    return `translate(${im.ox}%, ${im.oy}%) scale(${im.zoom / 100}) rotate(${im.rot || 0}deg)`;
+}
+
+// Capa de imagen (la usan Foto y Producto). Estructura:
+//   .cap-out  -> contenedor (container-type) con la sombra, que no gira con la imagen
+//     [data-capa] -> lo que se mueve / escala / rota (alrededor del centro de la imagen)
+//       <img>     -> con el tamaño real de la imagen (según su proporción), así los bordes
+//                    redondeados y el contorno siguen a la imagen y no a la caja completa.
+function capaImagen(im, idx, u, filtro, colorContorno) {
+    const entera = im.ajuste !== 'llenar';
+    const ar = Number(im.ar) > 0 ? Number(im.ar) : 0;
+    let caja, lado;
+    if (entera && ar) {
+        caja = `width:min(100cqw, calc(100cqh * ${ar})); height:min(100cqh, calc(100cqw / ${ar}));`;
+        lado = `min(100cqw, 100cqh, calc(100cqh * ${ar}), calc(100cqw / ${ar}))`;
+    } else {
+        caja = 'width:100%; height:100%;';
+        lado = 'min(100cqw, 100cqh)';
+    }
+    const radio = Number(im.radio) > 0 ? `border-radius:calc(${lado} * ${Number(im.radio) / 100});` : '';
+    const grosor = Number(im.contorno) > 0 ? `border:${px(im.contorno * u)} solid ${colorContorno}; box-sizing:border-box;` : '';
+    return `<div style="position:absolute; inset:0; container-type:size; pointer-events:none; ${filtro || ''}">` +
+        `<div data-capa="${idx}" data-ajuste="${im.ajuste}" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; transform:${transformImagen(im)}; transform-origin:50% 50%; cursor:grab; touch-action:none; user-select:none;">` +
+        `<img src="${im.src}" draggable="false" style="flex:none; ${caja} object-fit:${entera ? 'contain' : 'cover'}; display:block; ${radio} ${grosor} -webkit-user-drag:none;" />` +
+        `</div></div>`;
+}
+
+// Tamaño y centro (en px del flyer) que ocupa una imagen dentro de una caja cw × ch.
+function geometriaImagen(im, cw, ch) {
+    let w = cw, h = ch;
+    if (im.ajuste !== 'llenar' && Number(im.ar) > 0) {
+        const k = Math.min(cw / im.ar, ch);
+        w = k * im.ar; h = k;
+    }
+    const z = im.zoom / 100;
+    return { w: w * z, h: h * z, cx: cw / 2 + (im.ox / 100) * cw, cy: ch / 2 + (im.oy / 100) * ch };
 }
 
 function flyerFoto(c) {
@@ -675,8 +726,8 @@ function flyerFoto(c) {
     const capas = (c.imagenes || []).map((im, idx) => {
         if (!im.src) return '';
         const z = im.zoom / 100;
-        const sombra = (im.ajuste === 'entera' || z < 1) ? `filter:drop-shadow(0 ${px(4 * u)} ${px(10 * u)} rgba(0,0,0,0.35));` : '';
-        return `<img src="${im.src}" data-capa="${idx}" data-ajuste="${im.ajuste}" draggable="false" style="position:absolute; inset:0; width:100%; height:100%; object-fit:${im.ajuste === 'llenar' ? 'cover' : 'contain'}; object-position:50% 50%; transform:${transformImagen(im)}; transform-origin:50% 50%; display:block; cursor:grab; touch-action:none; user-select:none; ${sombra}" />`;
+        const sombra = (im.ajuste === 'entera' || z < 1 || im.radio > 0) ? `filter:drop-shadow(0 ${px(4 * u)} ${px(10 * u)} rgba(0,0,0,0.35));` : '';
+        return capaImagen(im, idx, u, sombra, acTexto);
     }).join('');
 
     // Sin fondo: las imágenes quedan sueltas sobre el negro, sin la tarjeta blanca.
@@ -710,7 +761,7 @@ function flyerFoto(c) {
         ${tarjetaFoto}
         <div style="position:relative; padding:${px(16 * u)} ${px(padX)} ${px(24 * u)}; display:flex; flex-direction:column; align-items:center; gap:${px(8 * u)};">
             ${movible(c, 'titulo', tituloHTML(c.lineas, tam * (c.tituloZoom || 100) / 100, '#ffffff', resaltado))}
-            ${movible(c, 'texto', textoHTML(c, '#d4d4d8', 13.5 * u, 2))}
+            ${apoyoTextoHTML(c, '#d4d4d8', 13.5 * u, 2)}
             ${filaInferior ? `<div style="margin-top:${px(4 * u)};">${filaInferior}</div>` : ''}
         </div>
     `);
@@ -777,6 +828,8 @@ async function render() {
         qrX: estado.qrX, qrY: estado.qrY, qrZoom: estado.qrZoom,
         linkActivo: !!estado.linkActivo,
         fondoFoto: estado.fondoFoto !== false,
+        vinetas: estado.vinetas !== false,
+        bloques: !!estado.bloques,
         imagenes: estado.imagenes,
         posiciones: posicionesActuales(),
         lineas: parsearTitulo(estado.titulo),
@@ -878,6 +931,13 @@ function sincronizarControles() {
     $('btn-qr-reset').disabled = !estado.qrActivo;
     $('qr-link-wrap').classList.toggle('opacity-50', !estado.qrActivo);
 
+    [['titulo', 'tituloZoom'], ['texto', 'textoZoom'], ['items', 'itemsZoom']].forEach(([id, campo]) => {
+        const r = $(`in-${id}-zoom`);
+        if (r && document.activeElement !== r) r.value = estado[campo];
+        const v = $(`${id}-zoom-val`);
+        if (v) v.textContent = `${estado[campo]}%`;
+    });
+
     estado.imagenes.forEach((im, i) => {
         const hay = !!im.src;
         $(`btn-quitar-imagen-${i}`).classList.toggle('hidden', !hay);
@@ -886,16 +946,20 @@ function sincronizarControles() {
         document.querySelectorAll(`[data-img="${i}"][data-ajuste]`).forEach(b => {
             b.classList.toggle('tile-activo', b.dataset.ajuste === im.ajuste);
         });
-        const r = $(`img-${i}-zoom`);
-        if (document.activeElement !== r) r.value = im.zoom;
-        $(`img-${i}-zoom-val`).textContent = `${im.zoom}%`;
+        [['zoom', '%'], ['rot', '°'], ['radio', '%'], ['contorno', ' px'], ['aro', '%']].forEach(([campo, unidad]) => {
+            const r = document.getElementById(`img-${i}-${campo}`);
+            if (!r) return;
+            if (document.activeElement !== r) r.value = im[campo];
+            $(`img-${i}-${campo}-val`).textContent = `${im[campo]}${unidad}`;
+        });
     });
+    document.querySelectorAll('[data-solo-producto]').forEach(el => el.classList.toggle('hidden', estado.plantilla !== 'producto'));
 }
 
 // Arma los controles de las dos imágenes (subir, ajuste, tamaño y posición)
 function construirControlesImagen() {
-    const fila = (i, campo, etiqueta, min, max) => `
-        <div>
+    const fila = (i, campo, etiqueta, min, max, extra = '') => `
+        <div ${extra}>
             <div class="flex items-center justify-between">
                 <label class="campo-label !mb-0" for="img-${i}-${campo}">${etiqueta}</label>
                 <span id="img-${i}-${campo}-val" class="text-[0.7rem] font-bold text-slate-400"></span>
@@ -917,6 +981,15 @@ function construirControlesImagen() {
                     <button type="button" class="tile" data-img="${i}" data-ajuste="entera"><span class="tile-label">Entera</span><span class="tile-sub">Se ve completa, sin recortar</span></button>
                 </div>
                 ${fila(i, 'zoom', 'Tamaño', 20, 300)}
+                ${fila(i, 'rot', 'Rotación', -180, 180)}
+                <div class="flex items-center gap-2 flex-wrap">
+                    <button type="button" class="btn-sec" data-img="${i}" data-giro="-90">↺ 90°</button>
+                    <button type="button" class="btn-sec" data-img="${i}" data-giro="90">↻ 90°</button>
+                    <button type="button" class="btn-sec" data-img="${i}" data-giro="0">Enderezar</button>
+                </div>
+                ${fila(i, 'radio', 'Bordes redondeados', 0, 50)}
+                ${fila(i, 'contorno', 'Contorno de color', 0, 20)}
+                ${i === 0 ? fila(i, 'aro', 'Aro brillante (0 = sin aro)', 0, 200, 'data-solo-producto="1"') : ''}
                 <div class="flex items-center justify-between gap-3">
                     <p class="campo-ayuda !mt-0">Arrastrala con el mouse o el dedo en la vista previa para moverla.</p>
                     <button type="button" class="btn-sec flex-shrink-0" data-centrar="${i}">Centrar</button>
@@ -947,6 +1020,8 @@ function llenarInputs() {
     $('in-qr-zoom').value = estado.qrZoom;
     $('qr-zoom-val').textContent = `${estado.qrZoom}%`;
     $('chk-fondo-foto').checked = estado.fondoFoto !== false;
+    $('chk-vinetas').checked = estado.vinetas !== false;
+    $('chk-bloques').checked = !!estado.bloques;
 }
 
 function actualizar(rapido = false) {
@@ -964,6 +1039,25 @@ function togglePanel(id, chevronId) {
         panel.classList.remove('hidden');
         $(chevronId).classList.add('rotate-180');
     }
+}
+
+// Proporción (ancho / alto) de una imagen: hace falta para que bordes y aro sigan a la imagen.
+function medirImagen(src) {
+    return new Promise((resolve) => {
+        const i = new Image();
+        i.onload = () => resolve(i.naturalHeight ? Math.round(i.naturalWidth / i.naturalHeight * 10000) / 10000 : 0);
+        i.onerror = () => resolve(0);
+        i.src = src;
+    });
+}
+
+// Imágenes guardadas antes de esta versión no tienen proporción: la calculamos una vez.
+async function asegurarAspectos() {
+    let cambio = false;
+    for (const im of estado.imagenes) {
+        if (im.src && !(im.ar > 0)) { im.ar = await medirImagen(im.src); cambio = true; }
+    }
+    if (cambio) actualizar(true);
 }
 
 // Reduce la foto subida (máx. 1600 px) para que pese poco y exporte rápido.
@@ -1240,6 +1334,14 @@ function iniciar() {
         actualizar(true);
     });
 
+    $('chk-bloques').addEventListener('change', (e) => {
+        estado.bloques = e.target.checked;
+        actualizar(true);
+    });
+    $('chk-vinetas').addEventListener('change', (e) => {
+        estado.vinetas = e.target.checked;
+        actualizar(true);
+    });
     $('chk-fondo-foto').addEventListener('change', (e) => {
         estado.fondoFoto = e.target.checked;
         actualizar(true);
@@ -1264,7 +1366,8 @@ function iniciar() {
         if (!archivo) return;
         try {
             const src = await leerImagen(archivo);
-            estado.imagenes[n] = { ...imagenesIniciales()[n], src };
+            const ar = await medirImagen(src);
+            estado.imagenes[n] = { ...imagenesIniciales()[n], src, ar };
             if (estado.plantilla === 'producto') Object.assign(estado.imagenes[n], { ajuste: 'entera', zoom: 75, ox: n ? 0 : 10, oy: 6 });
             else if (estado.plantilla !== 'foto') estado.plantilla = 'foto';
             actualizar(true);
@@ -1289,6 +1392,16 @@ function iniciar() {
             actualizar(true);
             return;
         }
+        const giro = e.target.closest('[data-giro]');
+        if (giro) {
+            const im = estado.imagenes[Number(giro.dataset.img)];
+            const g = Number(giro.dataset.giro);
+            let r = g === 0 ? 0 : (im.rot || 0) + g;
+            r = ((r + 180) % 360 + 360) % 360 - 180;   // siempre entre -180 y 180
+            im.rot = r;
+            actualizar(true);
+            return;
+        }
         const tile = e.target.closest('[data-ajuste]');
         if (tile) {
             estado.imagenes[Number(tile.dataset.img)].ajuste = tile.dataset.ajuste;
@@ -1308,16 +1421,24 @@ function iniciar() {
 
     // Devuelve la imagen que está realmente dibujada bajo el puntero (la de arriba primero).
     function imagenBajoPuntero(cx, cy) {
-        const imgs = [...document.querySelectorAll('#flyer-real img[data-capa]')].reverse();
-        for (const el of imgs) {
-            const r = el.getBoundingClientRect();
-            let x0 = r.left, y0 = r.top, w = r.width, h = r.height;
-            if (el.dataset.ajuste === 'entera' && el.naturalWidth && el.naturalHeight) {
-                const k = Math.min(w / el.naturalWidth, h / el.naturalHeight);
-                const dw = el.naturalWidth * k, dh = el.naturalHeight * k;
-                x0 += (w - dw) / 2; y0 += (h - dh) / 2; w = dw; h = dh;
+        const caps = [...document.querySelectorAll('#flyer-real [data-capa]')].reverse();
+        for (const el of caps) {
+            const im = estado.imagenes[Number(el.dataset.capa)];
+            if (!im) continue;
+            const r = el.parentElement.getBoundingClientRect();   // caja sin girar (ya con la escala de la vista previa)
+            let w = r.width, h = r.height;
+            if (el.dataset.ajuste === 'entera' && im.ar > 0) {
+                const k = Math.min(w / im.ar, h);
+                w = k * im.ar; h = k;
             }
-            if (cx >= x0 && cx <= x0 + w && cy >= y0 && cy <= y0 + h) return el;
+            const z = im.zoom / 100;
+            const mx = r.left + r.width / 2 + (im.ox / 100) * r.width;
+            const my = r.top + r.height / 2 + (im.oy / 100) * r.height;
+            const a = -(im.rot || 0) * Math.PI / 180;
+            const dx = cx - mx, dy = cy - my;
+            const lx = (dx * Math.cos(a) - dy * Math.sin(a)) / z;
+            const ly = (dx * Math.sin(a) + dy * Math.cos(a)) / z;
+            if (Math.abs(lx) <= w / 2 && Math.abs(ly) <= h / 2) return el;
         }
         return null;
     }
@@ -1413,6 +1534,74 @@ function iniciar() {
         im.oy = Math.round(limite(arrastre.oy + (e.clientY - arrastre.y) / arrastre.ch * 100) * 10) / 10;
         arrastre.el.style.transform = transformImagen(im);
     });
+    // ---- Agrandar textos con el mouse: rueda sobre el bloque o tirador en su esquina ----
+    // Título, texto de apoyo y lista tienen su propio tamaño (%), el mismo de los sliders.
+    const cfgZoom = (clave) => {
+        if (clave === 'titulo') return { campos: ['tituloZoom'], min: 50, max: 300 };
+        if (clave === 'items') return { campos: ['itemsZoom'], min: 50, max: 300 };
+        if (/^texto\d*$/.test(clave)) return { campos: estado.bloques ? ['textoZoom'] : ['textoZoom', 'itemsZoom'], min: 50, max: 300 };
+        return null;
+    };
+    const tirador = document.createElement('div');
+    tirador.title = 'Arrastrá para agrandar o achicar';
+    tirador.style.cssText = 'position:fixed; z-index:50; width:16px; height:16px; border-radius:9999px; background:#facc15; border:2px solid #09090b; box-shadow:0 1px 4px rgba(0,0,0,.4); cursor:nwse-resize; display:none; touch-action:none;';
+    document.body.appendChild(tirador);
+    let bloqueTirador = null, escalando = null;
+
+    function aplicarZoomBloque(clave, factor, base) {
+        const cfg = cfgZoom(clave);
+        cfg.campos.forEach(campo => {
+            const v = Math.round((base ? base[campo] : estado[campo]) * factor / 5) * 5;
+            estado[campo] = Math.max(cfg.min, Math.min(cfg.max, v));
+        });
+        actualizar();
+    }
+    function ponerTirador(el) {
+        if (!el || !cfgZoom(el.dataset.mover)) { bloqueTirador = null; tirador.style.display = 'none'; return; }
+        const r = el.getBoundingClientRect();
+        bloqueTirador = el.dataset.mover;
+        tirador.style.left = `${r.right - 8}px`;
+        tirador.style.top = `${r.bottom - 8}px`;
+        tirador.style.display = 'block';
+    }
+    stage.addEventListener('wheel', (e) => {
+        const el = e.target.closest ? e.target.closest('#flyer-real [data-mover]') : null;
+        if (!el || !cfgZoom(el.dataset.mover)) return;
+        e.preventDefault();
+        aplicarZoomBloque(el.dataset.mover, e.deltaY < 0 ? 1.08 : 1 / 1.08);
+        tirador.style.display = 'none';
+    }, { passive: false });
+    stage.addEventListener('pointermove', (e) => {
+        if (arrastre || escalando) return;
+        const el = e.target.closest ? e.target.closest('#flyer-real [data-mover]') : null;
+        if (el) ponerTirador(el);
+        else if (e.target !== tirador) ponerTirador(null);
+    });
+    stage.addEventListener('pointerleave', (e) => { if (!escalando && e.relatedTarget !== tirador) ponerTirador(null); });
+    tirador.addEventListener('pointerdown', (e) => {
+        const el = document.querySelector(`#flyer-real [data-mover="${bloqueTirador}"]`);
+        if (!el) return;
+        const r = el.getBoundingClientRect();
+        escalando = {
+            clave: bloqueTirador, ax: r.left, ay: r.top,
+            d0: Math.max(10, Math.hypot(e.clientX - r.left, e.clientY - r.top)),
+            base: { tituloZoom: estado.tituloZoom, textoZoom: estado.textoZoom, itemsZoom: estado.itemsZoom },
+        };
+        try { tirador.setPointerCapture(e.pointerId); } catch (err) { /* sin captura */ }
+        e.preventDefault();
+    });
+    tirador.addEventListener('pointermove', (e) => {
+        if (!escalando) return;
+        const d = Math.hypot(e.clientX - escalando.ax, e.clientY - escalando.ay);
+        aplicarZoomBloque(escalando.clave, d / escalando.d0, escalando.base);
+        tirador.style.left = `${e.clientX - 8}px`;
+        tirador.style.top = `${e.clientY - 8}px`;
+    });
+    const soltarTirador = () => { if (!escalando) return; escalando = null; ponerTirador(null); actualizar(true); };
+    tirador.addEventListener('pointerup', soltarTirador);
+    tirador.addEventListener('pointercancel', soltarTirador);
+    window.addEventListener('scroll', () => ponerTirador(null), true);
+
     const soltar = () => {
         if (!arrastre) return;
         arrastre = null;
@@ -1439,6 +1628,7 @@ function iniciar() {
 
     window.addEventListener('resize', renderDiferido);
     render();
+    asegurarAspectos();
 }
 
 document.addEventListener('DOMContentLoaded', iniciar);

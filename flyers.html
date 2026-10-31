@@ -161,6 +161,28 @@
                     <div>
                         <label class="campo-label" for="in-texto">Texto de apoyo</label>
                         <textarea id="in-texto" class="campo" rows="2" placeholder="Una o dos frases cortas"></textarea>
+                        <div class="flex items-center justify-between gap-3 mt-2">
+                            <div>
+                                <p class="campo-label !mb-0.5">Separar en bloques</p>
+                                <p class="text-[0.68rem] font-semibold text-slate-400">Cada párrafo (separalos con un renglón en blanco) y la lista de puntos se mueven por separado. No aplica al estilo Rayos.</p>
+                            </div>
+                            <label class="switch" aria-label="Separar el texto de apoyo en bloques movibles">
+                                <input id="chk-bloques" type="checkbox">
+                                <span class="switch-pista"></span>
+                                <span class="switch-bola"></span>
+                            </label>
+                        </div>
+                        <div data-plantillas="producto" class="flex items-center justify-between gap-3 mt-2">
+                            <div>
+                                <p class="campo-label !mb-0.5">Mostrar con viñetas</p>
+                                <p class="text-[0.68rem] font-semibold text-slate-400">Apagalo para que el texto salga corrido, sin puntitos.</p>
+                            </div>
+                            <label class="switch" aria-label="Mostrar el texto de apoyo con viñetas">
+                                <input id="chk-vinetas" type="checkbox" checked>
+                                <span class="switch-pista"></span>
+                                <span class="switch-bola"></span>
+                            </label>
+                        </div>
                         <div class="flex items-center justify-between mt-2">
                             <label class="campo-label !mb-0" for="in-texto-zoom">Tamaño de la letra</label>
                             <span id="texto-zoom-val" class="text-[0.7rem] font-bold text-slate-400"></span>
@@ -212,7 +234,7 @@
                     </label>
                 </div>
                 <div id="imagenes-wrap" class="flex flex-col gap-3"></div>
-                <p class="campo-ayuda">Podés subir hasta dos imágenes (por ejemplo, celular y PC). Con "Entera" y un tamaño menor la imagen se achica, y la movés arrastrándola con el mouse o el dedo en la vista previa; la segunda queda por encima de la primera. Al subir una imagen se activa el estilo Foto.</p>
+                <p class="campo-ayuda">Podés subir hasta dos imágenes (por ejemplo, celular y PC). Con "Entera" y un tamaño menor la imagen se achica, y la movés arrastrándola con el mouse o el dedo en la vista previa; la segunda queda por encima de la primera. Podés rotarla, redondear sus bordes y ponerle contorno; en el estilo Producto el aro brillante se adapta a la imagen (posición, tamaño y giro). Al subir una imagen se activa el estilo Foto.</p>
             </section>
 
             <section class="seccion">

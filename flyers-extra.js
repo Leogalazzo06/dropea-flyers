@@ -231,3 +231,198 @@ PLANTILLAS.tarjetadropea = {
     },
 };
 CONSTRUCTORES.tarjetadropea = flyerTarjetaDropea;
+
+
+// ============================================================
+// ESTILO EDITORIAL — limpio, con foto a sangre (inspirado en avisos tipo ARQ)
+// Arriba: logo, titular chico, número gigante y frase de cierre (una palabra en color).
+// Abajo: foto a pantalla completa con el texto del botón, tiendas y letra chica encima.
+//
+// Campos:
+//  - Título: el 1.er renglón va ARRIBA del número gigante, los demás ABAJO.
+//            Para resaltar con color: *palabra* (en medio del renglón) o * al inicio (renglón entero).
+//  - Texto gigante: el número / precio / fecha grande (si lo dejás vacío, el título pasa a ser el protagonista).
+//  - Etiqueta: línea chica sobre el titular (opcional).
+//  - Texto de apoyo / lista: debajo de la frase de cierre.
+//  - Botón: frase sobre la foto (admite *resaltado*). Pie: línea chica sobre la foto.
+//  - Imagen 1: la foto de fondo. Imagen 2 (opcional): un recorte suelto encima.
+// ============================================================
+
+// Valores nuevos del estado (se completan también para trabajos ya guardados)
+const EDITORIAL_DEFAULTS = { edOscuro: false, edTiendas: false, edAlto: 0 };
+Object.assign(ESTADO_INICIAL, EDITORIAL_DEFAULTS);
+Object.keys(EDITORIAL_DEFAULTS).forEach(k => { if (!(k in estado)) estado[k] = EDITORIAL_DEFAULTS[k]; });
+
+// Una tipografía fina y moderna, buena para el número gigante
+Object.assign(FUENTES, {
+    manrope: { label: 'Ligera', family: "'Manrope', sans-serif", gf: 'Manrope:wght@200..800' },
+});
+
+const edAltoDefecto = (formato) => ({ cuadrado: 50, vertical: 46, historia: 42, tarjeta: 50 }[formato] || 48);
+
+// "en tu suscripción a *Claude.*" -> [{t:'en tu suscripción a ', acc:false}, {t:'Claude.', acc:true}]
+// "*Claude." (asterisco solo al inicio o al final) -> todo el renglón resaltado
+function segmentosEd(raw) {
+    const t = String(raw || '').trim();
+    const sinBordes = t.replace(/^\*+\s*|\s*\*+$/g, '');
+    if (!sinBordes.includes('*')) return [{ t: sinBordes, acc: /^\*|\*$/.test(t) }];
+    const out = [];
+    t.split(/(\*[^*]*\*)/).forEach(p => {
+        if (!p) return;
+        if (/^\*[^*]*\*$/.test(p)) out.push({ t: p.slice(1, -1), acc: true });
+        else out.push({ t: p.replace(/\*/g, ''), acc: false });
+    });
+    return out.filter(s => s.t);
+}
+const spansEd = (raw, estiloAcc) => segmentosEd(raw).map(s => s.acc ? `<span style="${estiloAcc}">${esc(s.t)}</span>` : esc(s.t)).join('');
+
+function flyerEditorial(c) {
+    const { W, H, u, f } = c;
+    const E = estado;
+    const esTarjeta = f === FORMATOS.tarjeta;
+    const oscuroTema = !!E.edOscuro;
+
+    // --- colores ---
+    const fondo = oscuroTema ? '#0e0e10' : '#f2ece5';
+    const tinta = oscuroTema ? '#f5f5f4' : '#141414';
+    const suave = oscuroTema ? 'rgba(245,245,244,0.78)' : 'rgba(20,20,20,0.76)';
+    let acc = c.acento;
+    if (oscuroTema) {
+        if (c.oscuro) {   // color oscuro sobre fondo negro: si tiene tono lo aclaramos, si es gris/negro va blanco
+            const n = parseInt(acc.slice(1), 16), ch = [n >> 16 & 255, n >> 8 & 255, n & 255];
+            acc = (Math.max(...ch) - Math.min(...ch) > 40) ? rotarHex(acc, 0, 0.22) : '#ffffff';
+        }
+    }
+    else if (!c.oscuro && luminanciaHex(acc) > 0.4) acc = rotarHex(acc, 0, -0.22); // que se lea sobre el fondo claro
+    const estiloAccTitulo = `color:${acc};`;
+
+    // --- zonas ---
+    const frac = Number(E.edAlto) > 0 ? Number(E.edAlto) / 100 : edAltoDefecto(estadoFormatoClave(f)) / 100;
+    const zw = esTarjeta ? Math.round(W * frac) : W;
+    const zh = esTarjeta ? H : Math.round(H * frac);
+    const base = esTarjeta ? zw * 1.15 : zw;
+
+    // --- contenido ---
+    const crudas = String(E.titulo || '').split('\n').map(s => s.trim()).filter(Boolean);
+    const dest = c.campos.destacado.trim();
+    const arriba = dest ? crudas.slice(0, 1) : [];
+    const abajo = dest ? crudas.slice(1) : crudas;
+    const etiqueta = c.campos.etiqueta.trim();
+    const texto = c.campos.texto.trim();
+    const hayItems = parsearItems(c.items).length > 0;
+    const z = (c.tituloZoom || 100) / 100, zt = (c.textoZoom || 100) / 100;
+
+    // --- tamaños (se achican solos si no entra, después se aplica el zoom del usuario) ---
+    const fw = c.condensada ? 0.4 : 0.56;
+    let sH = base * (dest ? 0.042 : 0.078);
+    let sG = dest ? Math.min(base * 0.25, (zw * 0.86) / (Math.max(dest.length, 1) * fw)) : 0;
+    let sT = base * 0.03;
+    const sE = base * 0.024, logoH = Math.max(16 * u, base * 0.055), gap = base * 0.022;
+    const padTop = base * 0.06, padBot = base * 0.05;
+    const lineasTexto = texto ? Math.max(1, Math.ceil(texto.length * 0.5 * sT * zt / (zw * 0.8))) : 0;
+    const altos = (k) => logoH + (etiqueta ? sE * 1.3 : 0) + arriba.length * sH * k * 1.15 + (dest ? sG * k * 0.92 : 0)
+        + abajo.length * sH * k * 1.15 + lineasTexto * sT * k * 1.4 + parsearItems(c.items).length * sT * k * 1.5;
+    const nBloques = 1 + (etiqueta ? 1 : 0) + (arriba.length ? 1 : 0) + (dest ? 1 : 0) + (abajo.length ? 1 : 0) + (texto ? 1 : 0) + (hayItems ? 1 : 0);
+    const total = altos(1) + gap * (nBloques - 1) + padTop + padBot;
+    const k = Math.max(0.5, Math.min(1, zh / total));
+    sH *= k * z; sG *= k * z; sT *= k;
+
+    const estH = `font-size:${px(sH)}; font-weight:400; letter-spacing:-0.015em; line-height:1.12; text-align:center; color:${tinta}; white-space:nowrap;`;
+    const bloqueTitulo = (lineas) => lineas.length
+        ? `<div style="${estH}">${lineas.map(l => `<div>${spansEd(l, estiloAccTitulo)}</div>`).join('')}</div>` : '';
+    const giganteHtml = dest ? `<div style="font-size:${px(sG)}; font-weight:300; letter-spacing:-0.045em; line-height:0.92; color:${tinta}; white-space:nowrap; text-align:center;">${esc(dest)}</div>` : '';
+    const etiquetaHtml = etiqueta ? `<div style="font-size:${px(sE)}; font-weight:700; letter-spacing:0.22em; text-transform:uppercase; color:${acc}; white-space:nowrap;">${esc(etiqueta)}</div>` : '';
+    const textoDe = (s) => s.trim() ? `<div style="color:${suave}; font-size:${px(sT * zt)}; font-weight:400; line-height:1.35; text-align:center; max-width:${px(zw * 0.82)};">${esc(s.trim()).replace(/\n/g, '<br>')}</div>` : '';
+    const itemsHtml = itemsHTML(c, suave, sT);
+    const logo = movible(c, 'logo', logoHtml(c.dropea, oscuroTema, logoH), 'flex-shrink:0;');
+
+    // --- zona de texto ---
+    const zonaTexto = `
+        <div style="position:relative; z-index:2; box-sizing:border-box; flex:0 0 ${px(esTarjeta ? zw : zh)}; ${esTarjeta ? 'height:100%;' : 'width:100%;'} background:${fondo}; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:${px(gap)}; padding:${px(padTop)} ${px(zw * 0.06)} ${px(padBot)};">
+            ${logo}
+            ${movible(c, 'etiqueta', etiquetaHtml)}
+            ${movible(c, 'titulo', bloqueTitulo(arriba))}
+            ${movible(c, 'destacado', giganteHtml)}
+            ${movible(c, 'titulo2', bloqueTitulo(abajo))}
+            ${apoyoMovible(c, textoDe, itemsHtml, (a, b) => juntarColumna(u, a, b))}
+        </div>`;
+
+    // --- zona de foto ---
+    const sombra = 'filter:drop-shadow(0 ' + px(6 * u) + ' ' + px(14 * u) + ' rgba(0,0,0,0.35));';
+    const capas = (c.imagenes || []).map((im, i) => im.src ? capaImagen(im, i, u, i ? sombra : '', acc) : '').join('');
+    const vacia = `<div style="position:absolute; inset:0; background:linear-gradient(145deg, ${hexARgba(acc, 0.55)}, #18181b); display:flex; flex-direction:column; align-items:center; justify-content:flex-start; padding-top:${px(base * 0.1)}; gap:${px(8 * u)};">
+        ${chispa('#ffffff', 26 * u)}<span style="color:rgba(255,255,255,0.8); font-size:${px(11 * u)}; font-weight:800; letter-spacing:0.18em; text-transform:uppercase;">Subí tu foto</span></div>`;
+    const velo = `<div style="position:absolute; inset:0; pointer-events:none; background:linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.58) 100%);"></div>`;
+    const zonaFoto = `<div style="position:relative; z-index:1; flex:1; min-width:0; min-height:0; overflow:hidden; background:#18181b;">${capas || vacia}${velo}</div>`;
+
+    // --- encima de la foto: botón, tiendas, pie y letra chica ---
+    const sC = base * 0.05, bh = base * 0.072;
+    const ctaTxt = c.campos.cta.trim();
+    const ctaHtml = ctaTxt ? `<div style="color:#ffffff; font-size:${px(sC)}; font-weight:400; letter-spacing:-0.01em; line-height:1.15; white-space:nowrap; text-align:center; text-shadow:0 1px ${px(8 * u)} rgba(0,0,0,0.35);">${spansEd(ctaTxt, 'font-weight:700;')}</div>` : '';
+    const icoPlay = `<svg viewBox="0 0 24 24" width="${px(bh * 0.52)}" height="${px(bh * 0.52)}" style="flex-shrink:0; display:block;"><polygon points="4,2 14,12 4,22" fill="#2d9cf0"/><polygon points="4,2 17.5,10.2 14,12" fill="#2fd36e"/><polygon points="4,22 17.5,13.8 14,12" fill="#f2424b"/><polygon points="17.5,10.2 20.5,12 17.5,13.8 14,12" fill="#ffd33d"/></svg>`;
+    const icoApple = `<svg viewBox="0 0 24 24" width="${px(bh * 0.52)}" height="${px(bh * 0.52)}" fill="#ffffff" style="flex-shrink:0; display:block;"><path d="M12.152 6.896c-.948 0-2.415-1.078-3.96-1.04-2.04.027-3.91 1.183-4.961 3.014-2.117 3.675-.546 9.103 1.519 12.09 1.013 1.454 2.208 3.09 3.792 3.039 1.52-.065 2.09-.987 3.935-.987 1.831 0 2.35.987 3.96.948 1.637-.026 2.676-1.48 3.676-2.948 1.156-1.688 1.636-3.325 1.662-3.415-.039-.013-3.182-1.221-3.22-4.857-.026-3.04 2.48-4.494 2.597-4.559-1.429-2.09-3.623-2.324-4.39-2.376-2-.156-3.675 1.09-4.61 1.09zM15.53 3.83c.843-1.012 1.4-2.427 1.245-3.83-1.207.052-2.662.805-3.532 1.818-.78.896-1.454 2.338-1.273 3.714 1.338.104 2.715-.688 3.559-1.701"/></svg>`;
+    const insignia = (ico, chico, grande) => `<div style="display:flex; align-items:center; gap:${px(bh * 0.16)}; height:${px(bh)}; padding:0 ${px(bh * 0.3)}; border:${px(Math.max(0.8, bh * 0.03))} solid rgba(255,255,255,0.75); border-radius:${px(bh * 0.17)}; background:#000000; color:#ffffff; box-sizing:border-box; white-space:nowrap;">${ico}<div style="display:flex; flex-direction:column; line-height:1.05; text-align:left;"><span style="font-size:${px(bh * 0.19)}; font-weight:400;">${chico}</span><span style="font-size:${px(bh * 0.4)}; font-weight:600; letter-spacing:-0.01em;">${grande}</span></div></div>`;
+    const tiendasHtml = E.edTiendas ? `<div style="display:flex; align-items:center; justify-content:center; gap:${px(bh * 0.22)};">${insignia(icoPlay, 'Disponible en', 'Google Play')}${insignia(icoApple, 'Descargalo en', 'App Store')}</div>` : '';
+    const pie = c.campos.pie.trim();
+    const pieHtml = pie ? `<span style="color:rgba(255,255,255,0.9); font-size:${px(base * 0.022)}; font-weight:700; letter-spacing:0.2em; text-transform:uppercase; white-space:nowrap; text-shadow:0 1px ${px(6 * u)} rgba(0,0,0,0.4);">${esc(pie)}</span>` : '';
+    const legal = String(c.legal || '').trim();
+    const legalHtml = (legal && !esTarjeta) ? `<div style="color:rgba(255,255,255,0.84); font-size:${px(base * 0.0185)}; font-weight:500; line-height:1.2; text-align:center; max-width:94%; text-shadow:0 1px ${px(4 * u)} rgba(0,0,0,0.45);">${esc(legal).replace(/\n/g, '<br>')}</div>` : '';
+    const sobreLink = cajaLink(c) ? CAJA_LINK_BASE + CAJA_LINK_ALTO + 14 : 0;
+    const auto = 'pointer-events:auto;';
+    const encima = `
+        <div style="position:absolute; z-index:6; left:${esTarjeta ? px(zw) : '0'}; right:0; bottom:${px(sobreLink)}; pointer-events:none; display:flex; flex-direction:column; align-items:center; gap:${px(base * 0.02)}; padding:0 ${px(base * 0.03)} ${px(base * 0.035)};">
+            ${movible(c, 'cta', ctaHtml, auto)}
+            ${movible(c, 'tiendas', tiendasHtml, auto)}
+            ${movible(c, 'pie', pieHtml, auto)}
+            ${legalHtml}
+        </div>`;
+
+    // La letra chica la dibujamos nosotros encima de la foto (sin la franja negra de los otros estilos)
+    const cSinLegal = { ...c, legal: '' };
+    return marco(cSinLegal, `background:${fondo};`, `
+        <div style="display:flex; flex-direction:${esTarjeta ? 'row' : 'column'}; flex:1; min-height:0; width:100%;">${zonaTexto}${zonaFoto}</div>
+        ${encima}`);
+}
+
+// Clave del formato actual a partir del objeto (para leer el alto por defecto)
+function estadoFormatoClave(f) { return Object.keys(FORMATOS).find(k => FORMATOS[k] === f) || 'cuadrado'; }
+
+PLANTILLAS.editorial = {
+    label: 'Editorial', sub: 'Texto limpio y foto a pantalla completa',
+    alElegir() {
+        if (estado.titulo === ESTADO_INICIAL.titulo && estado.texto === ESTADO_INICIAL.texto) {
+            Object.assign(estado, {
+                etiqueta: '', titulo: 'Tu tienda online con\nde *comisiones* por venta.', destacado: '0%',
+                texto: 'Creá tu tienda gratis hoy.', items: '', cta: 'Empezá en *dropea.com.ar*', pie: '',
+                paleta: 'terracota',
+            });
+        }
+    },
+};
+CONSTRUCTORES.editorial = flyerEditorial;
+
+// ---------- Controles propios del estilo (switches y altura de la zona de texto) ----------
+(function () {
+    const sincEd = () => {
+        const el = (id) => document.getElementById(id);
+        if (!el('chk-ed-oscuro')) return;
+        const def = edAltoDefecto(estado.formato);
+        const v = Number(estado.edAlto) > 0 ? Number(estado.edAlto) : def;
+        if (document.activeElement !== el('in-ed-alto')) el('in-ed-alto').value = v;
+        el('ed-alto-val').textContent = `${v}%`;
+        el('chk-ed-oscuro').checked = !!estado.edOscuro;
+        el('chk-ed-tiendas').checked = !!estado.edTiendas;
+    };
+    const _llenar = llenarInputs; llenarInputs = function () { _llenar(); sincEd(); };
+    const _sinc = sincronizarControles; sincronizarControles = function () { _sinc(); sincEd(); };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const el = (id) => document.getElementById(id);
+        if (!el('chk-ed-oscuro')) return;
+        el('chk-ed-oscuro').addEventListener('change', (e) => { estado.edOscuro = e.target.checked; actualizar(true); });
+        el('chk-ed-tiendas').addEventListener('change', (e) => { estado.edTiendas = e.target.checked; actualizar(true); });
+        el('in-ed-alto').addEventListener('input', (e) => { estado.edAlto = Number(e.target.value); el('ed-alto-val').textContent = `${estado.edAlto}%`; actualizar(); });
+        el('btn-ed-alto-auto').addEventListener('click', () => { estado.edAlto = 0; actualizar(true); });
+        sincEd();
+    });
+})();

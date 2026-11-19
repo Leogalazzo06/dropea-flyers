@@ -1369,7 +1369,7 @@ function iniciar() {
             const ar = await medirImagen(src);
             estado.imagenes[n] = { ...imagenesIniciales()[n], src, ar };
             if (estado.plantilla === 'producto') Object.assign(estado.imagenes[n], { ajuste: 'entera', zoom: 75, ox: n ? 0 : 10, oy: 6 });
-            else if (estado.plantilla !== 'foto') estado.plantilla = 'foto';
+            else if (!['foto', 'editorial'].includes(estado.plantilla)) estado.plantilla = 'foto';
             actualizar(true);
         } catch (err) {
             console.error(err);
@@ -1492,7 +1492,7 @@ function iniciar() {
             e.preventDefault();
             return;
         }
-        if (estado.plantilla !== 'foto' && estado.plantilla !== 'producto') return;
+        if (!['foto', 'producto', 'editorial'].includes(estado.plantilla)) return;
         const el = imagenBajoPuntero(e.clientX, e.clientY);
         if (!el) return;
         const n = Number(el.dataset.capa);
@@ -1517,7 +1517,7 @@ function iniciar() {
         }
         if (!arrastre) {
             const sobreQR = qrBajoPuntero(e.clientX, e.clientY);
-            stage.style.cursor = (sobreQR || ((estado.plantilla === 'foto' || estado.plantilla === 'producto') && imagenBajoPuntero(e.clientX, e.clientY))) ? 'grab' : '';
+            stage.style.cursor = (sobreQR || ((['foto', 'producto', 'editorial'].includes(estado.plantilla)) && imagenBajoPuntero(e.clientX, e.clientY))) ? 'grab' : '';
             return;
         }
         if (arrastre.qr) {
@@ -1537,7 +1537,7 @@ function iniciar() {
     // ---- Agrandar textos con el mouse: rueda sobre el bloque o tirador en su esquina ----
     // Título, texto de apoyo y lista tienen su propio tamaño (%), el mismo de los sliders.
     const cfgZoom = (clave) => {
-        if (clave === 'titulo') return { campos: ['tituloZoom'], min: 50, max: 300 };
+        if (clave === 'titulo' || clave === 'titulo2') return { campos: ['tituloZoom'], min: 50, max: 300 };
         if (clave === 'items') return { campos: ['itemsZoom'], min: 50, max: 300 };
         if (/^texto\d*$/.test(clave)) return { campos: estado.bloques ? ['textoZoom'] : ['textoZoom', 'itemsZoom'], min: 50, max: 300 };
         return null;
